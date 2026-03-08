@@ -150,12 +150,13 @@ export default defineConfig({
     },
   },
   themeConfig: {
+    logo: { src: "/logo.png", width: 24, height: 24 },
     siteTitle: "RuaBot Docs",
     search: {
       provider: "local",
     },
     socialLinks: [
-      { icon: "github", link: "https://github.com/ValkyrieEY" },
+      { icon: "github", link: "https://github.com/ValkyrieEY/RuaBot" },
     ],
   },
 });

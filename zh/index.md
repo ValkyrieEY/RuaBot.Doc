@@ -1,9 +1,10 @@
 ---
 layout: home
+
 hero:
   name: RuaBot
-  text: 文档
-  tagline: FastAPI + OneBot + 插件运行时 + Web UI
+  text: FastAPI + OneBot + 插件运行时
+  tagline: 事件驱动 QQ 机器人框架，内置 Web UI 与插件生态
   actions:
     - theme: brand
       text: 快速开始
@@ -11,15 +12,24 @@ hero:
     - theme: alt
       text: 使用与运维
       link: /user-guide/operations_CN
+    - theme: alt
+      text: GitHub
+      link: https://github.com/ValkyrieEY/RuaBot
+  image:
+    src: /logo.png
+    alt: RuaBot
+
 features:
-  - title: 快速开始
-    details: 安装、配置并快速启动 RuaBot。
-  - title: 使用与运维
-    details: 日常操作、插件管理、AI 功能与故障排查。
-  - title: 插件开发
-    details: 了解插件运行时与 API，快速构建插件。
-  - title: 贡献指南
-    details: 架构、后端/前端结构与测试说明。
-  - title: 参考资料
-    details: 配置、API 总览与 plugin.json 参考。
+  - icon: 🧩
+    title: 插件运行时
+    details: 独立进程插件运行时，支持拦截器与热加载配置。
+  - icon: ⚡
+    title: 事件驱动
+    details: 统一事件总线与上下文管线，消息处理更可控。
+  - icon: 🤖
+    title: AI 子系统
+    details: 可选 AI 能力、模型管理与记忆存储一体化。
+  - icon: 🖥️
+    title: Web UI
+    details: React + Vite Web UI，配套管理与实时日志。
 ---
