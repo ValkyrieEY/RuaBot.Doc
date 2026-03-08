@@ -3,11 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "docs:dev": "vitepress dev .",
-    "docs:build": "vitepress build .",
-    "docs:preview": "vitepress preview ."
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
   },
   "devDependencies": {
-    "vitepress": "^1.6.4"
+    "@lunariajs/core": "^0.1.1",
+    "markdown-it-mathjax3": "^4.3.2",
+    "open-cli": "^8.0.0",
+    "postcss-rtlcss": "^5.7.1",
+    "vitepress": "^1.6.4",
+    "vitepress-plugin-group-icons": "^1.7.1",
+    "vitepress-plugin-llms": "^1.11.0"
   }
 }
