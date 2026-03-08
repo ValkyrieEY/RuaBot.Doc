@@ -8,10 +8,10 @@ hero:
   actions:
     - theme: brand
       text: 快速开始
-      link: /getting-started/overview_CN
+      link: /getting-started/overview
     - theme: alt
       text: 使用与运维
-      link: /user-guide/operations_CN
+      link: /user-guide/operations
     - theme: alt
       text: GitHub
       link: https://github.com/ValkyrieEY/RuaBot

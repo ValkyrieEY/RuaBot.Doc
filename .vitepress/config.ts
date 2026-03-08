@@ -113,7 +113,7 @@ const zhSidebar = [
 ];
 
 export default defineConfig({
-  base: "/RuaBot.Doc/v2/",
+  base: "/RuaBot.Doc/",
   title: "RuaBot Docs",
   description: "RuaBot (XQNEXT) Documentation",
   cleanUrls: true,
@@ -124,10 +124,9 @@ export default defineConfig({
       link: "/",
       themeConfig: {
         nav: [
-          { text: "Getting Started", link: "/getting-started/overview" },
+          { text: "Guide", link: "/getting-started/overview" },
           { text: "User Guide", link: "/user-guide/operations" },
-          { text: "Plugin Dev", link: "/plugin-development/README" },
-          { text: "Contributor Guide", link: "/contributor-guide/architecture-overview" },
+          { text: "Plugins", link: "/plugin-development/README" },
           { text: "Reference", link: "/reference/configuration-reference" },
         ],
         sidebar: enSidebar,
@@ -139,19 +138,31 @@ export default defineConfig({
       link: "/zh/",
       themeConfig: {
         nav: [
-          { text: "快速开始", link: "/getting-started/overview_CN" },
+          { text: "指南", link: "/getting-started/overview_CN" },
           { text: "使用与运维", link: "/user-guide/operations_CN" },
           { text: "插件开发", link: "/plugin-development/README_CN" },
-          { text: "贡献指南", link: "/contributor-guide/architecture-overview_CN" },
           { text: "参考资料", link: "/reference/configuration-reference_CN" },
         ],
         sidebar: zhSidebar,
       },
     },
   },
+  head: [
+    ["link", { rel: "icon", type: "image/png", href: "/logo.png" }],
+    ["meta", { name: "theme-color", content: "#5f67ee" }],
+    ["meta", { property: "og:type", content: "website" }],
+    ["meta", { property: "og:site_name", content: "RuaBot" }],
+    ["meta", { property: "og:url", content: "https://valkyrieey.github.io/RuaBot.Doc/" }],
+  ],
   themeConfig: {
     logo: { src: "/logo.png", width: 24, height: 24 },
-    siteTitle: "RuaBot Docs",
+    siteTitle: "RuaBot",
+    nav: [
+      { text: "Guide", link: "/getting-started/overview" },
+      { text: "User Guide", link: "/user-guide/operations" },
+      { text: "Plugins", link: "/plugin-development/README" },
+      { text: "Reference", link: "/reference/configuration-reference" },
+    ],
     search: {
       provider: "local",
     },

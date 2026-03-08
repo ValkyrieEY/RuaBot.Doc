@@ -1,3 +1,9 @@
+:root:where(:lang(fa)) {
+  --vp-font-family-base:
+    'Vazirmatn', 'Inter', ui-sans-serif, system-ui, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
 :root {
   --vp-home-hero-name-color: transparent;
   --vp-home-hero-name-background: -webkit-linear-gradient(
@@ -30,6 +36,7 @@
   padding: 18px;
 }
 
+/* used in reference/default-theme-search */
 img[src='/search.png'] {
   width: 100%;
   aspect-ratio: 1 / 1;
