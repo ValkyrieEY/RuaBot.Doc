@@ -1,161 +1,172 @@
-import {
-  defineConfig,
-  resolveSiteDataByRoute,
-  type HeadConfig
-} from 'vitepress'
-import {
-  groupIconMdPlugin,
-  groupIconVitePlugin,
-  localIconLoader
-} from 'vitepress-plugin-group-icons'
-import llmstxt from 'vitepress-plugin-llms'
+import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
-const prod = !!process.env.NETLIFY
-
-export default defineConfig({
+export default withMermaid({
+  // GitHub Pages 项目站点 URL：https://valkyrieey.github.io/RuaBot.Doc/
   base: '/RuaBot.Doc/',
-  title: 'VitePress',
-
-  rewrites: {
-    'en/:rest*': ':rest*'
-  },
-
+  lang: 'zh-CN',
+  title: '小依 QQ V3',
+  description: '小依 QQ V3 — 多租户 QQ 机器人 SaaS 管理平台官方文档',
+  // 旧草稿不进入构建产物
+  srcExclude: ['_draft/**'],
   lastUpdated: true,
   cleanUrls: true,
-  metaChunk: true,
-
-  markdown: {
-    math: true,
-    codeTransformers: [
-      // We use `[!!code` and `@@include` in demo to prevent transformation,
-      // here we revert it back.
-      {
-        postprocess(code) {
-          return code
-            .replaceAll('[!!code', '[!code')
-            .replaceAll('@@include', '@include')
-        }
-      }
-    ],
-    config(md) {
-      // TODO: remove when https://github.com/vuejs/vitepress/issues/4431 is fixed
-      const fence = md.renderer.rules.fence!
-      md.renderer.rules.fence = function (tokens, idx, options, env, self) {
-        const { localeIndex = 'root' } = env
-        const codeCopyButtonTitle = (() => {
-          switch (localeIndex) {
-            case 'es':
-              return 'Copiar código'
-            case 'fa':
-              return 'کپی کد'
-            case 'ko':
-              return '코드 복사'
-            case 'pt':
-              return 'Copiar código'
-            case 'ru':
-              return 'Скопировать код'
-            case 'zh':
-              return '复制代码'
-            case 'ja':
-              return 'コードをコピー'
-            default:
-              return 'Copy code'
-          }
-        })()
-        return fence(tokens, idx, options, env, self).replace(
-          '<button title="Copy Code" class="copy"></button>',
-          `<button title="${codeCopyButtonTitle}" class="copy"></button>`
-        )
-      }
-      md.use(groupIconMdPlugin)
-    }
-  },
-
-  sitemap: {
-    hostname: 'https://vitepress.dev',
-    transformItems(items) {
-      return items.filter((item) => !item.url.includes('migration'))
-    }
-  },
 
   head: [
-    [
-      'link',
-      { rel: 'icon', type: 'image/svg+xml', href: '/vitepress-logo-mini.svg' }
-    ],
-    [
-      'link',
-      { rel: 'icon', type: 'image/png', href: '/vitepress-logo-mini.png' }
-    ],
-    ['meta', { name: 'theme-color', content: '#5f67ee' }],
-    ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:site_name', content: 'VitePress' }],
-    [
-      'meta',
-      {
-        property: 'og:image',
-        content: 'https://vitepress.dev/vitepress-og.jpg'
-      }
-    ],
-    ['meta', { property: 'og:url', content: 'https://valkyrieey.github.io/RuaBot.Doc/' }]
+    ['meta', { name: 'theme-color', content: '#3c8cff' }],
   ],
 
   themeConfig: {
-    logo: { src: '/vitepress-logo-mini.svg', width: 24, height: 24 },
-
-    socialLinks: [
-      { icon: 'github', link: 'https://github.com/vuejs/vitepress' }
-    ],
+    outline: { level: [2, 3], label: '本页导航' },
+    docFooter: { prev: '上一页', next: '下一页' },
+    lastUpdatedText: '最后更新',
+    returnToTopLabel: '回到顶部',
+    sidebarMenuLabel: '目录',
+    darkModeSwitchLabel: '主题',
+    lightModeSwitchTitle: '切换到浅色模式',
+    darkModeSwitchTitle: '切换到深色模式',
 
     search: {
-      provider: 'local'
-    }
-  },
+      provider: 'local',
+      options: {
+        translations: {
+          button: { buttonText: '搜索文档', buttonAriaLabel: '搜索' },
+          modal: {
+            displayDetails: '显示详情',
+            resetButtonTitle: '清除',
+            backButtonTitle: '返回',
+            noResultsText: '没有找到结果',
+            footer: {
+              selectText: '选择',
+              navigateText: '切换',
+              closeText: '关闭',
+            },
+          },
+        },
+      },
+    },
 
-  locales: {
-    root: { label: 'English', lang: 'en-US', dir: 'ltr' },
-    zh: { label: '简体中文', lang: 'zh-Hans', dir: 'ltr' },
-    pt: { label: 'Português', lang: 'pt-BR', dir: 'ltr' },
-    ru: { label: 'Русский', lang: 'ru-RU', dir: 'ltr' },
-    es: { label: 'Español', lang: 'es', dir: 'ltr' },
-    ko: { label: '한국어', lang: 'ko-KR', dir: 'ltr' },
-    fa: { label: 'فارسی', lang: 'fa-IR', dir: 'rtl' },
-    ja: { label: '日本語', lang: 'ja', dir: 'ltr' }
-  },
-
-  vite: {
-    plugins: [
-      groupIconVitePlugin({
-        customIcon: {
-          vitepress: localIconLoader(
-            import.meta.url,
-            '../public/vitepress-logo-mini.svg'
-          ),
-          firebase: 'logos:firebase'
-        }
-      }),
-      prod &&
-        llmstxt({
-          workDir: 'en',
-          ignoreFiles: ['index.md']
-        })
+    nav: [
+      { text: '指南', link: '/guide/introduction' },
+      { text: '部署', link: '/deploy/requirements' },
+      { text: '平台', link: '/platforms/supported' },
+      {
+        text: '开发',
+        items: [
+          { text: 'XUBP 协议', link: '/xubp/overview' },
+          { text: '插件开发', link: '/plugin-dev/getting-started' },
+        ],
+      },
+      {
+        text: '使用',
+        items: [
+          { text: '管理后台', link: '/admin/overview' },
+          { text: '用户控制台', link: '/console/overview' },
+          { text: '常见问题', link: '/faq' },
+        ],
+      },
     ],
-    experimental: {
-      enableNativePlugin: true
-    }
-  },
 
-  transformPageData: prod
-    ? (pageData, ctx) => {
-        const site = resolveSiteDataByRoute(
-          ctx.siteConfig.site,
-          pageData.relativePath
-        )
-        const title = `${pageData.title || site.title} | ${pageData.description || site.description}`
-        ;((pageData.frontmatter.head ??= []) as HeadConfig[]).push(
-          ['meta', { property: 'og:locale', content: site.lang }],
-          ['meta', { property: 'og:title', content: title }]
-        )
-      }
-    : undefined
+    sidebar: {
+      '/guide/': [
+        {
+          text: '开始了解',
+          items: [
+            { text: '产品介绍', link: '/guide/introduction' },
+            { text: '核心特性', link: '/guide/features' },
+            { text: '系统架构', link: '/guide/architecture' },
+            { text: '名词解释', link: '/guide/glossary' },
+          ],
+        },
+      ],
+      '/deploy/': [
+        {
+          text: '部署与运维',
+          items: [
+            { text: '环境要求', link: '/deploy/requirements' },
+            { text: 'Docker 部署', link: '/deploy/docker' },
+            { text: '安装向导', link: '/deploy/install' },
+            { text: 'Nginx 反向代理', link: '/deploy/nginx' },
+            { text: '授权激活', link: '/deploy/authorization' },
+            { text: '在线更新', link: '/deploy/update' },
+            { text: '运维与备份', link: '/deploy/ops' },
+          ],
+        },
+      ],
+      '/platforms/': [
+        {
+          text: '平台接入',
+          items: [
+            { text: '支持的平台', link: '/platforms/supported' },
+          ],
+        },
+      ],
+      '/xubp/': [
+        {
+          text: 'XUBP 协议',
+          items: [
+            { text: '协议概览', link: '/xubp/overview' },
+            { text: '事件类型', link: '/xubp/events' },
+            { text: '消息流转', link: '/xubp/message-flow' },
+          ],
+        },
+      ],
+      '/plugin-dev/': [
+        {
+          text: '插件开发',
+          items: [
+            { text: '快速开始', link: '/plugin-dev/getting-started' },
+            { text: 'meta.yaml 元数据', link: '/plugin-dev/meta' },
+            { text: '配置项 setting.json', link: '/plugin-dev/settings' },
+            { text: '处理事件', link: '/plugin-dev/events' },
+            { text: '上下文 Context', link: '/plugin-dev/context' },
+            { text: '数据存储', link: '/plugin-dev/data-store' },
+            { text: '发送消息', link: '/plugin-dev/messages' },
+            { text: '拦截器', link: '/plugin-dev/interceptors' },
+            { text: '插件 WebUI', link: '/plugin-dev/webui' },
+            { text: '跨平台开发', link: '/plugin-dev/cross-platform' },
+            { text: '发布与上架', link: '/plugin-dev/publish' },
+          ],
+        },
+      ],
+      '/admin/': [
+        {
+          text: '管理后台',
+          items: [
+            { text: '后台总览', link: '/admin/overview' },
+            { text: '用户管理', link: '/admin/users' },
+            { text: '适配器集群', link: '/admin/adapters' },
+            { text: '插件市场审核', link: '/admin/marketplace' },
+            { text: '订阅与计费', link: '/admin/subscriptions' },
+            { text: '开发者管理', link: '/admin/developers' },
+            { text: '内容与公告', link: '/admin/content' },
+            { text: '系统设置', link: '/admin/settings' },
+            { text: '审计与日志', link: '/admin/audit' },
+          ],
+        },
+      ],
+      '/console/': [
+        {
+          text: '用户控制台',
+          items: [
+            { text: '控制台总览', link: '/console/overview' },
+            { text: '机器人管理', link: '/console/bots' },
+            { text: '插件中心', link: '/console/plugins' },
+            { text: '我的订阅', link: '/console/subscriptions' },
+            { text: '账户与充值', link: '/console/account' },
+            { text: 'Open API', link: '/console/openapi' },
+          ],
+        },
+      ],
+    },
+
+    socialLinks: [
+      { icon: 'github', link: 'https://sq.yuafeng.cn' },
+    ],
+
+    footer: {
+      message: '基于 VitePress 构建 · 闭源商业产品，未经授权禁止复制传播',
+      copyright: 'Copyright © 2026 小依 QQ V3',
+    },
+  },
 })
