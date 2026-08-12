@@ -1,8 +1,10 @@
-# 配置项 setting.json
+# 配置项
 
-> **你会学到**：如何用 `setting.json` 给插件做一个可视化配置表单，让用户在后台填写参数。
-
-`setting.json` 定义插件在管理后台的**配置表单**。用户填写的值会通过 `context.settings` 传给插件，不用改代码就能调整行为。
+> **你会学到**：如何给插件做一个可视化配置表单，让用户在后台填写参数。
+>
+> ::: tip C++ 框架（Xiaoyi_QQ_C）
+> 本框架的配置 schema 是 **`BotPluginMeta.setting_schema_json`** 字段（JSON 字符串，即 `BOT_REGISTER_PLUGIN_EX` 宏传入的 schema），**没有 `setting.json` 文件**。插件在 `bot_plugin_init` 里用 `api->setting_get` 读取用户配置。
+> :::
 
 ## 一个完整示例
 

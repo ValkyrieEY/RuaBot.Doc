@@ -1,6 +1,10 @@
 # 发送消息
 
 > **你会学到**：怎么发纯文本、富媒体、Markdown、按钮、引用回复，以及自动撤回。
+>
+> ::: tip C++ 框架（Xiaoyi_QQ_C）
+> C++ 侧用 `bot::Message::reply(text)` 回文本；复杂消息用 `BotHostApi::send_reply(evt, segments_json, len)` / `send_proactive(...)`，segments 为 XUBP 消息段数组（见下节 v2 统一段模型）。参考 [C++ SDK](./cpp-sdk)。
+> :::
 
 ## 两种发送方式
 
@@ -15,6 +19,23 @@ await context.send_message({                            # 复杂消息
     "msg_type": 0,
 })
 ```
+
+## XUBP v2：统一消息段（推荐）
+
+v2 里入站/出站统一用 `segments` 数组表达富消息（替代 v1 的 `msg_type`+`media_url` 分裂，段类型见 [xubp/v2-overview](../xubp/v2-overview#3-统一消息段模型)）：
+
+```python
+await context.send_message({
+    "segments": [
+        {"type": "text", "text": "你好 "},
+        {"type": "at", "user_id": "成员OpenID"},
+        {"type": "image", "url": "https://example.com/a.png"},
+        {"type": "reply", "message_id": "要回复的消息ID"},
+    ],
+})
+```
+
+支持段类型：`text` / `at` / `reply` / `image` / `audio` / `video` / `file` / `markdown` / `keyboard`。框架按平台能力自动映射为原生消息（QQ 官方：image → /files 上传 → msg_type:7）。以下 v1 的 `msg_type` 写法仍兼容，但新插件建议用 `segments`。
 
 ## msg_type 消息类型
 

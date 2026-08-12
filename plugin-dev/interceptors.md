@@ -1,6 +1,8 @@
 # 拦截器
 
-> **你会学到**：怎么在消息发出前/后介入，实现内容过滤、敏感词替换、消息审计、自动撤回。
+> **C++ 框架（Xiaoyi_QQ_C）对应接口**：见 [C++ SDK](./cpp-sdk)。以下 Python 示例说明的是 XUBP 协议语义。
+>
+> > **你会学到**：怎么在消息发出前/后介入，实现内容过滤、敏感词替换、消息审计、自动撤回。
 
 ## 什么是拦截器
 
@@ -20,7 +22,7 @@
 3. 插件和绑定都是启用状态。
 
 ::: tip 拦截器也是普通插件
-一个插件可以**同时**处理入站事件（`handle_event`）和拦截出站消息（`handle_outgoing`）。不需要单独做一种"拦截器插件"。纯拦截器插件把 `meta.yaml` 的 `events` 设为 `[]` 即可。
+一个插件可以**同时**处理入站事件（`bot_plugin_on_message`）和拦截出站消息（`bot_plugin_intercept_outgoing`）。不需要单独做一种"拦截器插件"。纯拦截器插件（C 框架）在 `BOT_REGISTER_PLUGIN_EX` 里 `events_mask` 设 `0`、`intercepts` 设 `0b110` 即可（Python 侧把 `events` 设为 `[]`）。
 :::
 
 ## handle_outgoing —— 发出前拦截
@@ -95,7 +97,7 @@ async def handle_after_send(context):
 
 ## 设置优先级
 
-优先级在机器人绑定插件时配置（控制台里的「优先级」字段），不在 `meta.yaml` 里。
+优先级在机器人绑定插件时配置（控制台里的「优先级」字段）。C 框架里 `BotPluginMeta.priority` 是默认值，实际按绑定/`[[plugin]]` 的 priority 生效。
 
 | 数值 | 含义 |
 |------|------|

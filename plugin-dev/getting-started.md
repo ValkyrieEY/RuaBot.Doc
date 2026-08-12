@@ -4,88 +4,98 @@
 
 ## 插件是什么
 
-插件是 V3 里提供某项功能的**可安装模块**——签到、积分商城、视频解析、AI 对话……都做成插件。客户在插件市场浏览、购买、安装，然后绑定到自己的机器人上即可使用。
+插件是框架里提供某项功能的**可安装模块**——签到、积分、视频解析、AI 对话……都做成插件。管理员装载插件到机器人上即可使用。
 
 插件基于 [XUBP 协议](../xubp/overview) 开发，**一份代码在所有平台通用**。
 
+> **注意**：本框架是 **C++ + C ABI 插件**（编译成 `.so`/`.dll`），插件元数据用 **C 结构体**声明（见 `bot_plugin.h`），**没有 `meta.yaml`**。SDK 见 [`plugin_sdk.hpp`](./cpp-sdk)。
+
 ## 插件目录结构
 
-一个插件就是一个文件夹，至少包含两个文件：
+一个插件就是一个目录，包含源码 + 构建脚本：
 
 ```
 plugins/your_plugin/
-├── meta.yaml        # 插件元数据（必需）
-├── main.py          # 插件入口，定义钩子函数（必需）
-├── setting.json     # 可视化配置项定义（可选）
-└── webui/           # 管理界面（可选）
-    └── dist/
-        └── index.html   # 自包含 HTML（内联 CSS/JS）
+├── CMakeLists.txt    # 构建配置（编译成 .so/.dll）
+├── your_plugin.cpp   # 插件源码（必需）
 ```
 
-| 文件 | 必需 | 作用 |
-|------|------|------|
-| `meta.yaml` | ✅ | 声明插件的代码、名称、版本、订阅的事件等 |
-| `main.py` | ✅ | 写处理逻辑，定义钩子函数 |
-| `setting.json` | ❌ | 定义用户在后台填写的配置表单 |
-| `webui/dist/index.html` | ❌ | 插件自带的管理界面 |
+## 加载方式（bot.toml 声明）
+
+插件**不是自动扫描目录**，而是在 `config/bot.toml` 里用 `[[plugin]]` 声明 .so 路径、启停和优先级，框架启动时 `dlopen` 加载：
+
+```toml
+[[plugin]]
+code     = "intercept"                        # 插件码（与 BotPluginMeta.code 一致）
+so       = "./build/plugins/intercept/libintercept.dll"   # 编译产物路径
+enabled  = true
+priority = 100
+```
+
+编译插件 → 把 `.so`/`.dll` 路径填进 `[[plugin]]` → 重启框架即可装载。
 
 ## 最简插件：收到"你好"就回复
 
-**`meta.yaml`**：
+**`echo.cpp`**：
 
-```yaml
-code: hello
-name: 你好插件
-version: 1.0.0
-author: 你的名字
-description: 收到"你好"就回复
-events:
-  - message.group
-  - message.private
+```cpp
+#include "plugin_sdk.hpp"   // C++ SDK（header-only，内部含 bot_plugin.h）
+#include <string_view>
+
+extern "C" void bot_plugin_on_message(const BotMessageEvent* evt) {
+    bot::Message m(evt);                       // 消息视图
+    if (m.is_group() && !m.at_me()) return;    // 群消息：只回 @我的
+    m.reply(m.text());                          // 把内容原样回给发送者
+}
+
+// 注册元数据 + 必需导出符号（内部生成 abi_version/meta/init/shutdown）
+BOT_REGISTER_PLUGIN("echo", "回声", "0.1.0", "xbot", "demo");
 ```
 
-**`main.py`**：
-
-```python
-async def handle_event(context):
-    if context.event.get("content") == "你好":
-        await context.reply("你好！我是机器人~")
-```
-
-就这么多。框架会自动发现 `handle_event`，在收到群消息或私聊消息时调用它，把回复发回去。
+就这么多。框架自动调用 `bot_plugin_on_message`，收到群/私聊消息时把它原样回过去。
 
 ## 环境准备
 
-开发插件只需要一个文本编辑器，**不需要本地跑起整个 V3**。开发流程：
+插件是 C++ 源码，用框架的 `plugin_sdk.hpp`（header-only，无需链接库）。开发流程：
 
-1. 按上面的结构建好插件文件夹。
-2. 写好 `meta.yaml` 和 `main.py`。
-3. 把文件夹打包成 zip（或直接上传文件夹）。
-4. 在 V3 后台 / 开发者中心上传插件。
-5. 安装到测试机器人上，发消息验证。
+1. 在 `plugins/<code>/` 建好源码 + CMakeLists。
+2. 写处理逻辑，用 `BOT_REGISTER_PLUGIN` 声明元数据。
+3. 编译成 `.so`/`.dll`，放入插件目录。
+4. 在管理后台把插件装载到机器人，发消息验证。
 
-::: tip 本地调试技巧
-`main.py` 里的钩子函数可以是普通 `def` 或 `async def`，框架自动适配。本地想验证逻辑时，可以把 `context` 用一个 mock 字典模拟，跑通核心逻辑再上传。
-:::
+## 必需导出符号
 
-## 钩子函数一览
+C ABI 要求插件导出以下符号（`BOT_REGISTER_PLUGIN` 宏已替你生成）：
 
-插件通过定义特定名称的函数来响应事件，框架自动识别并调用：
+| 符号 | 作用 |
+|------|------|
+| `bot_plugin_abi_version()` | ABI 版本号（宏生成） |
+| `bot_plugin_meta()` | 返回 `const BotPluginMeta*` 元数据（宏生成） |
+| `bot_plugin_init(api, reserved)` | 初始化，拿到 `BotHostApi`（宏调用 `bot::init_sdk`） |
+| `bot_plugin_shutdown()` | 卸载时清理（宏生成空实现） |
 
-| 钩子 | 触发时机 |
-|------|---------|
-| `handle_event(context)` | 收到订阅的事件 |
-| `handle_outgoing(context)` | 消息即将发出前（拦截器用） |
-| `handle_after_send(context)` | 消息成功发出后 |
-| `handle_webui(context, action, payload)` | 插件 WebUI 前端请求 |
-| `on_start(info)` | 插件进程启动 |
-| `on_stop(info)` | 插件进程停止 |
+可选回调（按需实现，见 [事件](./events)）：
+- `bot_plugin_on_message(const BotMessageEvent*)` —— **所有事件都走它**（含互动/通知，用 `evt->type` 区分）
+- `bot_plugin_intercept_incoming/outgoing/after_send` —— 拦截器
+- 指令 handler（`register_command` 注册）
 
-最常用的是 `handle_event`。其余按需实现，不写就不触发。
+> **注意**：`bot_plugin_on_notice` 已在 ABI 声明为可选，但**当前框架版本尚未接线**（通知事件尚未派发到插件）。现阶段插件通过 `bot_plugin_on_message` 接收所有事件，用 `evt->type` 区分类型。
+
+## 钩子一览
+
+| C 符号 | 触发时机 | 当前版本 |
+|------|---------|---------|
+| `bot_plugin_on_message` | 收到事件（消息/互动等，`evt->type` 区分） | ✅ |
+| `bot_plugin_intercept_incoming` | 入站消息进入插件链前 | ✅ |
+| `bot_plugin_intercept_outgoing` | 消息发出前（拦截器用） | ✅ |
+| `bot_plugin_intercept_after_send` | 消息成功发出后 | ✅ |
+| `bot_plugin_on_notice` | 通知事件（进群/退群/好友/表情） | ⏳ ABI 预留未接线 |
+| `api->register_command` | 注册指令 | ✅ |
+| `bot::Logger` | 写运行时日志 | ✅ |
 
 ## 下一步
 
-- 声明插件信息 → [meta.yaml 元数据](./meta)
-- 让用户能配置 → [配置项 setting.json](./settings)
-- 写处理逻辑 → [处理事件](./events)
-- 看全部可用接口 → [上下文 Context](./context)
+- C++ SDK 全部接口 → [C++ SDK 参考](./cpp-sdk)
+- 声明插件元数据（`BotPluginMeta` 结构）→ [插件元数据](./meta)
+- 处理事件 → [处理事件](./events)
+- 调用平台能力（禁言/撤回/进群审批…）→ [能力调用](./capabilities)

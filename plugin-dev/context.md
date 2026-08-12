@@ -1,6 +1,10 @@
 # 上下文 Context
 
 > **你会学到**：Context 对象的全部属性和方法——这是你写插件最常打交道的对象。
+>
+> ::: tip C++ 框架（Xiaoyi_QQ_C）
+> C++ 侧没有 Python 的 context 对象，等价能力在 `bot::Message`（发消息/取字段）和 `BotHostApi`（`bot::host()`，含 kv/blob/setting/log/register_command/has_capability/capability_invoke）里，见 [C++ SDK](./cpp-sdk)。
+> :::
 
 框架调用钩子函数时，会传入一个 Context 对象。它包含事件数据、用户配置、以及发送消息 / 存取数据的方法。
 
@@ -50,6 +54,7 @@ async def handle_event(context):
 | `await send_notification(target, content, *, message_type)` | 发送文本通知 |
 | `await recall_message(message_id, *, target, message_type)` | 撤回消息 |
 | `log(message, level="INFO")` | 写运行时日志 |
+| `capabilities` | 平台能力查询/调用（XUBP v2） |
 
 #### reply —— 最常用的回复
 
@@ -69,6 +74,20 @@ await context.send_message({
 ```
 
 省略 `conversation` / `target` 时，自动用当前事件的会话。详见[发送消息](./messages)。
+
+#### capabilities —— 调用平台能力（XUBP v2）
+
+```python
+if context.capabilities.has("xubp.group.member.mute"):
+    await context.capabilities.invoke("xubp.group.member.mute", {
+        "group_openid": "群OpenID",
+        "member_openid": "成员OpenID",
+        "op": "add",
+        "mute_expire_at": "2026-09-01T10:00:00+08:00",
+    })
+```
+
+用于撤回、禁言、踢人、表情表态、进群审批、按钮回执、富媒体上传等平台能力。详见 [能力调用](./capabilities)。
 
 #### send_proactive_message —— 主动推送
 

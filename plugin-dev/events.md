@@ -1,10 +1,14 @@
 # 处理事件
 
-> **你会学到**：`handle_event` 钩子怎么写、收到的 event 字典长什么样、怎么取常用字段。
+> **你会学到**：事件钩子怎么写、收到的事件长什么样、怎么取常用字段。
+>
+> ::: tip C++ 框架（Xiaoyi_QQ_C）
+> 本框架用 C++ SDK：入口是 `bot_plugin_on_message(const BotMessageEvent*)`，事件字段即 `BotMessageEvent` 结构（`text()`/`sender_id()`/`group_id()`/`at_me()` 等见 [C++ SDK](./cpp-sdk)）。以下 Python 示例说明的是 XUBP 事件语义，C++ 侧对应字段在事件结构体里都能取到。
+> :::
 
-## handle_event 钩子
+## 事件钩子
 
-这是最核心的钩子。当收到 `meta.yaml` 里 `events` 订阅的事件时，框架调用它：
+**C++ 框架**：最核心的是 `bot_plugin_on_message(const BotMessageEvent* evt)`，所有事件（消息/互动/通知）都经它投递，用 `evt->type` 区分。以下 Python 示例（`handle_event`）说明的是同一套事件语义：
 
 ```python
 async def handle_event(context):
@@ -135,8 +139,43 @@ async def handle_event(context):
             await context.reply(f"收到图片：{url}")
 ```
 
+## XUBP v2 事件补充
+
+### 按钮/互动事件（interaction）
+
+用户点击消息按钮 / 快捷菜单时，框架归一化为 **`BOT_EVT_INTERACTION`** 事件，经 `bot_plugin_on_message` 投递（`evt->type == BOT_EVT_INTERACTION`），`evt->interaction_data` 含回调信息（JSON 串：`interaction_id` / `button_id` / `button_data` / `message_id` / `scene`）。框架已自动回执（消除 loading），插件无需处理回执。
+
+```cpp
+extern "C" void bot_plugin_on_message(const BotMessageEvent* evt) {
+    if (evt->type != BOT_EVT_INTERACTION) return;
+    if (!evt->interaction_data) return;
+    // interaction_data = {"interaction_id":...,"button_id":...,"button_data":...}
+    if (std::string_view(evt->interaction_data).find("\"button_data\":\"confirm\"") != std::string_view::npos) {
+        // 用 bot::Message(evt).reply(...) 回复
+    }
+}
+```
+
+（Python 侧示例：`context.event_type == "interaction"`，`event["interaction_data"]`。）
+
+### 引用/回复消息
+
+收到"回复机器人消息"时，事件带 `referenced_message_id`（被回复的原消息）：
+
+```python
+async def handle_event(context):
+    ref = context.event.get("referenced_message_id")
+    if ref:
+        await context.reply(f"你回复了消息 {ref}")
+```
+
+### 统一会话标识
+
+v2 事件新增 `chat.chat_openid`（群 group_openid / 私聊 user_openid），作为发送目标统一标识。见 [xubp/v2-overview](../xubp/v2-overview#5-统一身份模型)。
+
 ## 下一步
 
+- 调用平台能力（禁言/撤回/进群审批…）→ [能力调用](./capabilities)
 - 看全部可用接口 → [上下文 Context](./context)
 - 存取数据 → [数据存储](./data-store)
 - 发送各种消息 → [发送消息](./messages)
