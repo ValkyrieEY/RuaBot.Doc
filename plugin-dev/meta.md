@@ -19,6 +19,7 @@ typedef struct BotPluginMeta {
     uint32_t    events_mask;       /* 订阅事件位集（位掩码）*/
     uint8_t     intercepts;        /* 拦截器位：bit0=in bit1=out bit2=after */
     const char* setting_schema_json; /* 配置项 schema（JSON，可空）*/
+    const char* logo;              /* 插件 logo：网络 URL / 相对 .so 目录的本地路径 / 空串 */
 } BotPluginMeta;
 ```
 
@@ -31,7 +32,8 @@ static const BotPluginMeta _meta = {
     0u,       /* propagation: continue */
     BOT_EVT_MASK_MESSAGE,   /* events_mask：订阅消息事件 */
     0b111u,   /* intercepts：in+out+after 三层都实现 */
-    ""        /* setting_schema */
+    "",       /* setting_schema */
+    ""        /* logo（可留空）*/
 };
 extern "C" const BotPluginMeta* bot_plugin_meta(void) { return &_meta; }
 ```
@@ -47,15 +49,42 @@ BOT_REGISTER_PLUGIN("echo", "回声", "0.1.0", "xbot", "demo");
 // 默认：priority=1000, propagation=continue, events_mask=消息事件, 无拦截器
 ```
 
-需要更多控制用 `BOT_REGISTER_PLUGIN_EX`：
+需要更多控制用 `BOT_REGISTER_PLUGIN_EX`（末位 `LOGO`：网络 URL / 相对 .so 目录的本地路径 / `""`）：
 
 ```cpp
 BOT_REGISTER_PLUGIN_EX("intercept", "拦截器", "0.2.0", "xbot", "demo",
                        500u,        // priority
                        0u,          // propagation: continue
                        BOT_EVT_MASK_MESSAGE,   // events_mask
-                       0b111u);     // intercepts: in+out+after
+                       0b111u,      // intercepts: in+out+after
+                       "");         // logo（网络 URL 或本地路径）
 ```
+
+## 插件 logo
+
+管理端上传插件后，机器人详情页与插件市场会以**图片卡片/Logo 列**展示插件图标；无 logo 显示默认图标。三种来源（框架读取优先级：**内嵌二进制 > `logo` 字符串**）：
+
+| 方式 | 做法 | 适用 |
+|------|------|------|
+| **网络 URL** | `logo` 填 `https://…` | 图标托管在 CDN/对象存储 |
+| **本地文件** | `logo` 填相对 `.so` 所在目录的路径（如 `logo.png`）；上传时框架读取字节入库 | 图标和 `.so` 一起分发 |
+| **内嵌二进制** | 用 `BOT_PLUGIN_LOGO_EMBED` 宏把字节随 `.so/.dll` 导出，无需外链 | 最推荐，单文件分发、离线可用 |
+
+```cpp
+#include "plugin_sdk.hpp"
+
+// 内嵌一个 SVG 图标（字节随 .so/.dll 一起导出，框架自动读取）
+static const char kLogo[] =
+    "<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>"
+    "<rect width='64' height='64' rx='14' fill='#2d8cf0'/></svg>";
+BOT_PLUGIN_LOGO_EMBED(kLogo, sizeof(kLogo) - 1)
+
+BOT_REGISTER_PLUGIN("echo", "回声", "0.1.0", "xbot", "demo");
+// 也可以把网络 URL 直接写进 LOGO 参数：
+// BOT_REGISTER_PLUGIN_EX(..., "https://cdn.example.com/echo.png")
+```
+
+> `BOT_PLUGIN_LOGO_EMBED(DATA, SIZE)` 展开为两个可选导出符号 `bot_plugin_logo_data()` / `bot_plugin_logo_size()`，支持 PNG / ICO / JPG / GIF / SVG 原始字节。
 
 ## 字段说明
 
@@ -70,6 +99,7 @@ BOT_REGISTER_PLUGIN_EX("intercept", "拦截器", "0.2.0", "xbot", "demo",
 | `events_mask` | — | 声明插件关注的[事件类型](../xubp/events)位集，用 `BOT_EVT_BIT(type)` 组合；`BOT_EVT_MASK_MESSAGE` = 群+私聊。**注意：当前版本分发时尚未按此位过滤**（所有事件都经 `bot_plugin_on_message` 投递，插件自行用 `evt->type` 判断），此字段为将来按位过滤预留 |
 | `intercepts` | `0` | 实现哪些拦截器：bit0=incoming / bit1=outgoing / bit2=after_send |
 | `setting_schema_json` | `""` | 配置项 schema（JSON 数组，见 [配置项](./settings)），可空 |
+| `logo` | `""` | 插件 logo 字符串（网络 URL / 本地路径）；内嵌二进制见上方 `BOT_PLUGIN_LOGO_EMBED` |
 
 ## 事件订阅（events_mask）
 

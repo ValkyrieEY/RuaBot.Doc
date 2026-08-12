@@ -11,9 +11,9 @@
 // 基础版：默认 priority=1000, continue, 消息事件, 无拦截器
 BOT_REGISTER_PLUGIN("echo", "回声", "0.1.0", "xbot", "demo");
 
-// 进阶：自定义 priority/propagation/events_mask/intercepts
+// 进阶：自定义 priority/propagation/events_mask/intercepts（末位可选 LOGO：网络 URL / 本地路径）
 BOT_REGISTER_PLUGIN_EX("x", "X插件", "1.0.0", "me", "tool",
-                       500u, 0u, BOT_EVT_MASK_MESSAGE, 0b111u);
+                       500u, 0u, BOT_EVT_MASK_MESSAGE, 0b111u, "");
 ```
 
 宏自动生成 `bot_plugin_abi_version / bot_plugin_meta / bot_plugin_init / bot_plugin_shutdown` 四个必需符号，并在 `init` 里调用 `bot::init_sdk(api)`。
