@@ -2,49 +2,49 @@
 layout: home
 
 hero:
-  name: 小依 QQ V3
-  text: 多租户 QQ 机器人 SaaS 平台
-  tagline: 一套系统，服务无数客户。分布式适配器、插件市场、订阅计费、RBAC 权限，开箱即用。
+  name: Xiaoyi_QQ_V4
+  text: 单二进制 QQ 机器人框架
+  tagline: 一个可执行文件 + 一个数据库即可上线。多机器人管理、插件市场、插件自带 Web 面板、云编译上架。
   actions:
     - theme: brand
       text: 快速部署
-      link: /deploy/requirements
+      link: /deploy/install
     - theme: alt
       text: 开发插件
       link: /plugin-dev/getting-started
     - theme: alt
       text: 了解产品
-      link: /guide/introduction
+      link: /guide/what-is
 
 features:
+  - icon: 📦
+    title: 单二进制部署
+    details: 编译产物是一个 C++ 可执行文件，前端已内嵌其中，除 PostgreSQL 外不需要 Redis、消息队列等任何中间件。
+    link: /guide/what-is
+    linkText: 了解架构取舍
   - icon: 🤖
-    title: 多平台适配器
-    details: QQ 官方、OneBot、Telegram、Discord、KOOK、飞书、钉钉、微信公众号、企业微信，九大平台一套接口。
-    link: /platforms/supported
-    linkText: 查看支持的平台
+    title: 机器人即开即用
+    details: 控制台两步接入 QQ 官方机器人或 OneBot 11，创建后立即上线，不需要重启服务。
+    link: /platforms/overview
+    linkText: 查看接入方式
   - icon: 🧩
     title: 插件市场
-    details: 第三方开发者上传插件、定价上架、收益分成。一次编写，所有平台通用运行。
+    details: 上传插件包即可上架，按机器人一键安装、启用与配置；插件可自带 Web 面板，也能调用平台能力发消息、禁言、审批入群。
+    link: /console/plugins
+    linkText: 浏览插件市场
+  - icon: 🛠️
+    title: 插件开发友好
+    details: 一个头文件即 SDK，21 行写出第一个插件；ABI 只增不改，云编译服务在线把源码编成可上架的插件包。
     link: /plugin-dev/getting-started
-    linkText: 开始开发插件
-  - icon: 🏢
-    title: 多租户 SaaS
-    details: 单平台服务多个客户组织，机器人、插件数据、订阅按租户天然隔离。
-    link: /guide/features
-    linkText: 查看核心特性
+    linkText: 开始写插件
+  - icon: 🎛️
+    title: 可视化管理
+    details: 机器人状态、消息记录、运行日志、服务器监控、插件面板全部在网页端完成，不用登服务器看日志。
+    link: /console/overview
+    linkText: 看看控制台
   - icon: 💳
     title: 订阅与计费
-    details: 灵活套餐（月/年/永久）、卡密兑换、余额充值、彩虹易支付集成，资源配额自动管控。
-    link: /admin/subscriptions
-    linkText: 了解计费体系
-  - icon: 🛡️
-    title: RBAC 权限
-    details: 管理后台、用户控制台、开发者中心三套角色，细粒度权限控制，全操作审计留痕。
-    link: /guide/architecture
-    linkText: 查看系统架构
-  - icon: 🔄
-    title: 在线更新
-    details: 后台一键检测新版本，增量更新 + 自动重启，无需 SSH 动手。
-    link: /deploy/update
-    linkText: 了解在线更新
+    details: 套餐、卡密兑换、余额充值与易支付对接开箱可用，按套餐限制机器人与插件位。
+    link: /console/billing
+    linkText: 了解订阅体系
 ---

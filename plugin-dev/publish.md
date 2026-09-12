@@ -1,59 +1,119 @@
-# 发布与装载
+---
+title: 云编译与上架
+description: 用云编译服务把源码变成插件包（上传源码 → 审查 → 编译 → 下载产物），以及上架到插件市场与安装到机器人。
+---
 
-> **你会学到**：怎么把写好的插件编译并装载到框架。
->
-> ::: tip 本框架（Xiaoyi_QQ_C）
-> 本框架**无开发者市场/分成/提现**（D1 决策：插件由平台方/管理员统一提供）。插件的"发布"即**编译成 .so/.dll 并在 `config/bot.toml` 的 `[[plugin]]` 声明装载**，然后由管理员绑定到机器人。以下 V3 开发者中心/上架的说明仅供参考。
-> :::
+# 云编译与上架
 
-## 编译插件
+写完了插件，还差两步：**把它编译出来**、**让它出现在插件市场**。这页给两条路：
 
-插件是 C++ 源码（`plugin_sdk.hpp`），用 CMake 编译成 `.so`/`.dll`：
+- **云编译服务**（推荐给没有 Linux 编译环境的作者）：上传源码 zip，服务端帮你编译并打包；
+- **本地自己编译**：本地有 g++ 时更快，编完直接上传动态库。
 
-```bash
-# plugins/intercept/ 里 CMakeLists 已就绪
-cmake --build build --target intercept
-# 产物：plugins/intercept/libintercept.dll（或 .so）
-```
+## 云编译服务是什么
 
-## 装载插件
+一个网页工具：**上传源码 zip → 网页审查 → 点编译 → 看实时日志 → 下载插件包**。
 
-在 `config/bot.toml` 声明（重启生效）：
+它的职责边界很清楚：**只编译，不运行你的插件业务逻辑**。产物是与你自建服务器同架构的动态库，拿回来就能上传到控制台。
 
-```toml
-[[plugin]]
-code     = "intercept"                              # 与 BotPluginMeta.code 一致
-so       = "./build/plugins/intercept/libintercept.dll"   # 编译产物路径
-enabled  = true
-priority = 100
-```
-
-## 绑定到机器人
-
-管理员在管理后台把插件装载到指定机器人（`bot_plugin_bindings` 表），可配置优先级/启停/拦截开关。
-
-::: tip code 要稳定
-`BotPluginMeta.code` 决定插件身份。**一旦确定不要改**——数据存储、绑定关系都靠它关联。改 `code` 会被当成全新插件，历史数据丢失。
+::: tip 为什么需要它
+云编译在 Ubuntu 24.04 x86_64 上编译——与框架服务器一致。你在 Windows 上写的插件，用本地编译器产出的动态库不能直接在服务器上加载，云编译正好解决这个问题。
 :::
 
-## 版本管理
+## 1. 准备源码
 
-升级插件时 `BotPluginMeta.version` 递增（如 `1.0.0` → `1.0.1`），重新编译 `.so`/`.dll` 并更新 `[[plugin]]` 指向即可。
+源码要求（不满足会在审查阶段被拦下）：
 
-## 检查清单
+| 要求 | 说明 |
+| --- | --- |
+| 语言 | 纯 C / C++ |
+| 头文件 | 只依赖 SDK：`#include "plugin_sdk.hpp"`（header-only，无外部依赖） |
+| 扩展名 | `.c` / `.cc` / `.cpp` / `.cxx` |
+| 多文件 | 允许；所有源文件会被**一起编进同一个** `plugin.so` |
+| 第三方库 | **v1 不支持**，请保持自包含 |
+| 注册 | 用 `BOT_REGISTER_PLUGIN("code","名称","版本","作者","分类")` 注册，回调按需实现 |
 
-发布/装载前过一遍：
+最小可用的源码就是 [最小示例](/plugin-dev/minimal) 里那份 `echo.cpp`，直接拿它试跑一遍最快。
 
-- [ ] `BotPluginMeta.code` 稳定、`version` 已递增
-- [ ] `events_mask` 声明了关注的事件；纯拦截器插件 `intercepts` 设对应位
-- [ ] `setting_schema_json` 的字段都有合理的 `default` 和 `label`
-- [ ] 主流程用 `bot::Message` / `BotHostApi` 统一接口（跨平台）
-- [ ] 平台特有功能用 `has_capability` 判断并降级处理
-- [ ] 没有硬编码的测试数据 / 密钥
-- [ ] 内存资源（`capability_invoke` 的 `out`）记得释放
-- [ ] `description` 写清楚了功能和用法
+```text
+myplugin.zip
+└── mybot.cpp          # 只放源码；SDK 由云编译服务提供
+```
+
+## 2. 上传源码 zip
+
+打开云编译服务的网页，把源码 zip 拖进去。服务端的限制：
+
+| 项 | 限制 |
+| --- | --- |
+| 单个 zip 大小 | 8 MB |
+| 解压后总大小 | 50 MB |
+| 解压后文件数 | 200 |
+| 单次编译超时 | 180 秒 |
+
+## 3. 网页审查
+
+上传后页面会列出这次要编译的源文件清单，**先看一眼再点编译**——这一步是给你自己确认「上传的是最新代码、没有多余文件」。审查通过后点「编译」。
+
+## 4. 编译与实时日志
+
+编译过程有**实时日志**（流式输出），可以边编边看。常见失败原因：
+
+| 日志线索 | 原因 |
+| --- | --- |
+| `fatal error: plugin_sdk.hpp: No such file` | 源码里 include 路径写错，或者头文件名拼错 |
+| `error: 'xxx' was not declared` | 用了 SDK 里不存在的符号，或忘了 `#include "plugin_sdk.hpp"` |
+| `error: … C++17` 相关 | 代码用到更高或更低标准的特性，调整语法 |
+| 超时 | 源文件过多或模板展开过大，精简代码 |
+
+## 5. 下载产物
+
+编译成功后下载得到 `plugin.zip`，里面是两样东西：
+
+```text
+plugin.zip
+├── plugin.so        # 编译好的插件（C ABI，ABI 1.5）
+└── manifest.json    # {abi, sdk_version, built_at, source_files, plugin{...}}
+```
+
+`manifest.json` 是给云编译服务与你自己核对信息用的；**上传到控制台时它会被忽略**（控制台只认 `.so`/`.dll` 与 `web/` 目录），所以带不带它都能直接上传。
+
+## 6. 上架与安装
+
+拿到产物后走三步：
+
+```text
+1. 管理后台 → 插件上传 → 拖入 plugin.zip（或其中解出来的 .so）
+2. 上传即热加载，插件出现在「插件市场」，对用户可见
+3. 用户（或你）在插件市场点「安装」，选择要装到哪台机器人
+```
+
+上传时控制台会自动从动态库里**读取元数据**（编码、名称、版本、作者、分类、logo、设置项、面板入口），不需要手填。上传后可随时在管理后台启停或隐藏这个插件。
+
+带 Web 面板的插件要注意：**打包 zip 时必须把 `web/` 目录一起打进去**（云编译只编源码，不产出你的前端资源）。正确做法是：
+
+```text
+上架用的 zip
+├── plugin.so          # 云编译产物
+└── web/               # 你的面板前端（自己打包进来）
+    └── index.html
+```
+
+## 本地自己编译的路线
+
+本地有 g++ 时不必绕云编译：
+
+```bash
+# 1) 编出动态库
+g++ -shared -fPIC -std=c++17 mybot.cpp -o mybot.so -I./include
+
+# 2) 管理后台 → 插件上传 → 拖入 mybot.so（或连 web/ 一起打成 zip）
+```
+
+两条路的产物完全等价，区别只有编译环境：**本地编译要自己保证与服务器架构一致**（服务器是 Linux x86_64）。在 Windows 上直接编出的 `.dll` 不能上传到 Linux 服务器使用，这种场景请走云编译。
 
 ## 下一步
 
-- 调用平台能力（禁言/撤回/进群审批…）→ [能力调用](./capabilities)
-- C++ SDK 全部接口 → [C++ SDK 参考](./cpp-sdk)
+- [调试与排错](/plugin-dev/debugging)：编译通过但加载失败、插件不触发怎么查
+- [ABI 与兼容规则](/plugin-dev/abi)：产物声明的 ABI 版本与框架怎么协商
+- [目录结构与打包](/plugin-dev/structure)：zip 里放什么、面板怎么随包发布

@@ -1,118 +1,132 @@
+---
+title: 拦截器
+description: 三个拦截点（入站改写、出站阻断、发送回执）的语义、声明方式、每机器人开关与优先级传播规则。
+---
+
 # 拦截器
 
-> **C++ 框架（Xiaoyi_QQ_C）对应接口**：见 [C++ SDK](./cpp-sdk)。以下 Python 示例说明的是 XUBP 协议语义。
->
-> > **你会学到**：怎么在消息发出前/后介入，实现内容过滤、敏感词替换、消息审计、自动撤回。
+回调让插件**看见**消息，拦截器让插件**插手**消息：在事件派发给插件之前改写它、在消息真正发出去之前拦住它、在发送完成后拿到回执。这页讲清三个拦截点的语义和三条容易踩的规则。
 
-## 什么是拦截器
+## 三个拦截点
 
-普通插件只处理**入站事件**（收到消息）。拦截器是一种特殊插件，额外在**出站消息**的两个时机介入：
+| 拦截点 | 导出符号 | 时机 | 能做什么 | 返回值含义 |
+| --- | --- | --- | --- | --- |
+| 入站 | `bot_plugin_intercept_incoming` | 路由后、派发给插件之前 | 改写事件（内容、发送者等） | **非 0 = 停止传播**，后续插件收不到 |
+| 出站 | `bot_plugin_intercept_outgoing` | 插件发出消息之后、适配器真正发送之前 | 改写或丢弃出站消息 | **非 0 = 阻断**，消息不发 |
+| 回执 | `bot_plugin_intercept_after_send` | 适配器发送完成后 | 只读观察结果 | 无（`void`） |
 
-- **发出前**（`handle_outgoing`）：消息即将发给平台前，可以**修改内容**或**阻断发送**。
-- **发出后**（`handle_after_send`）：消息成功发出后，可以做统计、审计、自动撤回。
+对应签名：
 
-典型用途：敏感词过滤、广告注入、发送统计、消息审计日志。
+```cpp
+int  bot_plugin_intercept_incoming (BotMessageEvent* evt);   /* 非 0 = 停止传播 */
+int  bot_plugin_intercept_outgoing(BotOutgoing* msg);        /* 非 0 = 阻断发送 */
+void bot_plugin_intercept_after_send(const BotSendResult* r);
+```
 
-## 启用拦截器
+`BotOutgoing` 带三个可写字段：`bot_id`、`target`（群 id 或用户 id）、`chat_type`（`0` 私聊 / `1` 群 / `2` 频道）、`segments_json`（出站消息段 JSON）。`BotSendResult` 提供 `ok`（`1` 成功）、`message_id`、`error`（错误码）。
 
-拦截器需要满足三个条件才会触发：
+## 声明与开关
 
-1. 机器人绑定该插件时，开启 **「拦截出站消息」** 开关。
-2. 插件实现对应的钩子函数（`handle_outgoing` / `handle_after_send`）。
-3. 插件和绑定都是启用状态。
+三个回调都必须在元数据里用 `intercepts` 位**声明**，否则框架不会把它们挂上：
 
-::: tip 拦截器也是普通插件
-一个插件可以**同时**处理入站事件（`bot_plugin_on_message`）和拦截出站消息（`bot_plugin_intercept_outgoing`）。不需要单独做一种"拦截器插件"。纯拦截器插件（C 框架）在 `BOT_REGISTER_PLUGIN_EX` 里 `events_mask` 设 `0`、`intercepts` 设 `0b110` 即可（Python 侧把 `events` 设为 `[]`）。
+| 位 | 值 | 对应拦截点 |
+| --- | --- | --- |
+| `bit0` | `0b001` | incoming |
+| `bit1` | `0b010` | outgoing |
+| `bit2` | `0b100` | after_send |
+
+```cpp
+// 三个拦截器全开：INTERCEPTS 传 0b111（= 7）
+BOT_REGISTER_PLUGIN_EX("gatekeeper", "消息管家", "1.0.0", "你的名字", "admin",
+                       500u, 0u, BOT_EVT_MASK_MESSAGE, 0b111u, "", "")
+```
+
+手写导出时就在 `meta` 结构里给 `intercepts` 字段赋值（框架的 `plugins/intercept/intercept.cpp` 就是这么写的）。**导出符号名字必须完全正确**，写错等于没实现。
+
+::: tip 绑定粒度是「每台机器人」
+`intercepts` 声明的是**插件具备**哪几个拦截点；而**每台机器人**可以在控制台单独开关：
+
+- 机器人详情页 → 插件 Tab → 配置 → 「运行参数」里的 **Incoming 拦截 / Outgoing 拦截 / AfterSend 回调** 三个开关；
+- 同一个插件装在机器人 A 上可以只开 incoming，装在机器人 B 上可以三个都开。
+
+所以插件里不要假设「我声明了 incoming 就一定每台机器人都会调到」。
 :::
 
-## handle_outgoing —— 发出前拦截
+## 入站拦截：改写事件
 
-```python
-async def handle_outgoing(context):
-    message = context.message          # 当前消息（可读可改）
+最典型的用法是改写 `content`（例如加前缀、做敏感词替换）：
 
-    # 示例：敏感词替换
-    text = message.get("content", "")
-    if "违禁词" in text:
-        context.set_message({"content": text.replace("违禁词", "***")})
+```cpp
+static thread_local std::string g_in_buf;   // 必须用 thread_local / static 缓冲
 
-    # 示例：完全阻断发送
-    if "禁止发送" in text:
-        context.block()
+extern "C" int bot_plugin_intercept_incoming(BotMessageEvent* evt) {
+    if (!evt->content) return 0;
+    g_in_buf  = "[in] ";
+    g_in_buf += evt->content;
+    evt->content = g_in_buf.c_str();   // 让 evt 指向生命周期足够长的缓冲
+    return 0;                          // 0 = 继续传播给后续插件
+}
 ```
 
-可用的操作：
-
-| 方法 | 说明 |
-|------|------|
-| `context.message` | 当前消息字典（可读取） |
-| `set_message(msg)` | 替换整个消息内容 |
-| `add_message(msg)` | 添加替代消息 |
-| `block()` | 阻断原消息发送 |
-| `stop()` | 停止后续拦截器（不再往下传） |
-
-也支持返回字典的方式（等价）：
-
-```python
-async def handle_outgoing(context):
-    return {"message": {"content": "替换内容"}, "block": True}
-```
-
-## handle_after_send —— 发出后回调
-
-```python
-async def handle_after_send(context):
-    if context.ok:
-        # 发送成功
-        msg_id = context.sent_message_id
-        # 例：统计发送量、记审计日志、定时撤回
-        ...
-    else:
-        # 发送失败
-        context.log("消息发送失败", "WARN")
-```
-
-可用信息：
-
-| 属性 | 说明 |
-|------|------|
-| `context.ok` | 是否发送成功 |
-| `context.sent_message_id` | 平台返回的消息 ID（可用来撤回） |
-| `context.message` | 已发送的消息 |
-| `context.source_plugin_code` | 触发发送的插件 |
-
-也可调 `context.recall_message(msg_id)` 撤回。
-
-## 优先级与传播
-
-一个机器人可以装**多个**拦截器。它们的执行顺序由**优先级**决定：
-
-- 优先级数值**越小越先执行**（默认 100）。
-- 同优先级按绑定顺序排。
-- 某个拦截器调 `stop()` 后，**后续拦截器不再执行**。
-
-::: warning 拦截器不会拦截自身
-如果插件 A 调用 `send_message`，插件 A 自己的 `handle_outgoing` **不会被触发**，避免无限递归。通过 `context.source_plugin_code` 可识别消息来自哪个插件。
+::: danger 改写字符串必须用长生命周期缓冲
+`evt->content` 只是一个指针。指向函数局部 `std::string` 的 `c_str()`，函数一返回就是**悬垂指针**，后续插件会读到垃圾数据甚至崩溃。用 `static` / `static thread_local` 缓冲，或者插件常驻对象里的缓冲。
 :::
 
-## 设置优先级
+返回非 0 表示**停止传播**：后面的插件（以及 `on_message` 派发）都不会再看到这条事件。适合做「拦截即终结」的场景（例如命中违禁词直接回一句并终止）。改写后的内容才是后续插件看到的内容——这是入站拦截的语义约定。
 
-优先级在机器人绑定插件时配置（控制台里的「优先级」字段）。C 框架里 `BotPluginMeta.priority` 是默认值，实际按绑定/`[[plugin]]` 的 priority 生效。
+## 出站拦截：阻断或改写
 
-| 数值 | 含义 |
-|------|------|
-| 小（如 1-50） | 先执行，适合高优先级过滤（如安全审计） |
-| 100（默认） | 常规 |
-| 大（如 500+） | 后执行 |
+出站拦截能看到**所有**出站消息（包括插件自己发的、框架被动回复的），因为 `send_reply` / `send_proactive` 都走这条链。
 
-## 传播策略
+```cpp
+extern "C" int bot_plugin_intercept_outgoing(BotOutgoing* msg) {
+    if (msg->segments_json &&
+        std::string_view(msg->segments_json).find("bad") != std::string_view::npos) {
+        bot::Logger::warn() << "outgoing blocked (contains 'bad')";
+        return 1;          // 非 0 = 这条消息不发
+    }
+    return 0;              // 0 = 放行
+}
+```
 
-入站事件（`handle_event`）也有传播概念：
+两条语义要点：
 
-- **continue**（默认）：本插件处理完后，后续插件继续处理同一事件。
-- **stop**：本插件处理完后，事件不再传给后续插件（适合"独占"该命令的插件）。
+- **阻断后消息不会发出，也不会触发 `after_send` 回执**；
+- 改写也和入站一样：`msg->segments_json` 与 `msg->target` 必须指向生命周期长于本次调用的缓冲。
+
+## 发送回执
+
+发送完成后被调用，用来记账、统计、排错：
+
+```cpp
+extern "C" void bot_plugin_intercept_after_send(const BotSendResult* r) {
+    bot::Logger::info() << "[after_send] ok=" << (r->ok ? 1 : 0) << " err=" << r->error;
+}
+```
+
+它拿不到消息内容，只有成功与否、消息 id 和错误码。想按内容统计请在出站拦截里做。
+
+## 优先级与传播策略
+
+同一台机器人上可能装了多个带拦截器的插件，顺序由这套规则决定：
+
+| 规则 | 说明 |
+| --- | --- |
+| 优先级 | `priority` **数字越小越先**执行；同优先级按安装/加载顺序稳定排列 |
+| 每机器人独立 | 优先级是**每台机器人**一份配置（控制台「运行参数 → 优先级」可改），插件元数据里的值只是安装时的默认值 |
+| 入站链 | 按优先级依次调用；一旦某个插件返回非 0，**立即停止后续传播** |
+| 出站链 | 按优先级依次调用；一旦某个插件返回非 0，**立即阻断**（后续插件不再拿到这条消息） |
+| 回执链 | 按优先级全部调用一遍，没有阻断概念 |
+| `propagation` | 元数据里的 `propagation`（`0`=continue / `1`=stop）作用于消息派发：该插件处理完 `on_message` 后中断后续插件，用于「终结型」插件 |
+
+实践建议：
+
+- 只做**观察**的插件（日志、统计）给一个较大的 `priority`（例如 9000），排在改写类插件后面，看到的就是最终形态的事件；
+- 做**改写/拦截**的插件给较小的 `priority`（例如 100）先跑；
+- 用 `propagation=stop` 要慎重：它会让同机器人上后面所有插件都收不到这条消息。
 
 ## 下一步
 
-- 给插件做个管理界面 → [插件 WebUI](./webui)
-- 跨平台注意 → [跨平台开发](./cross-platform)
+- [生命周期回调](/plugin-dev/lifecycle)：三个拦截器与其它符号的调用时机对照
+- [插件元数据](/reference/meta)：`intercepts` 位与宏参数怎么写
+- [处理事件](/plugin-dev/events)：不改写事件时，普通回调怎么处理消息

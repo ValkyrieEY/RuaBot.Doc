@@ -1,0 +1,42 @@
+/**
+ * Xiaoyi_QQ_V4 文档站主题微调
+ * 原则：只覆盖 CSS 变量与少量排版，不改 DOM 结构（避免 VitePress 升级后崩版）。
+ */
+
+:root {
+  /* 品牌色：单一主色，明暗模式同源，避免出现"另一个蓝色" */
+  --vp-c-brand-1: #2563eb;
+  --vp-c-brand-2: #1d4ed8;
+  --vp-c-brand-3: #1e40af;
+  --vp-c-brand-soft: rgba(37, 99, 235, 0.14);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #2563eb 30%, #22d3ee);
+
+  /* 首页 hero 右侧的装饰光斑，与品牌色一致 */
+  --vp-home-hero-image-background-image: linear-gradient(-45deg, #2563eb 50%, #22d3ee 50%);
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+.dark {
+  --vp-c-brand-1: #60a5fa;
+  --vp-c-brand-2: #3b82f6;
+  --vp-c-brand-3: #2563eb;
+  --vp-c-brand-soft: rgba(96, 165, 250, 0.16);
+}
+
+/* 代码块与表格在中文排版下更紧凑一点 */
+.vp-doc table {
+  display: table;
+  width: 100%;
+}
+
+.vp-doc th,
+.vp-doc td {
+  padding: 8px 12px;
+}
+
+/* 首页 feature 卡片对齐更整齐 */
+.VPFeature {
+  height: 100%;
+}

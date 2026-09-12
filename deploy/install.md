@@ -1,65 +1,140 @@
-# 安装向导
+---
+title: 安装
+description: 在 Ubuntu 24.04 服务器上安装 Xiaoyi_QQ_V4：.deb 包、tar.gz 便携包与直接运行二进制三种方式。
+---
 
-> **你会学到**：首次启动时如何通过 Web 向导完成初始化。
+# 安装 🌱
 
-容器启动后，第一次访问会进入**安装向导**（`/install`）。向导只会在系统未安装时出现，安装完成后不再可访问。
+这页讲怎么把 Xiaoyi_QQ_V4 装到服务器上并让它跑起来。读完你能完成：选择安装方式、确认前置依赖、启动并确认服务状态，然后进入首次配置。
 
-## 访问向导
+Xiaoyi_QQ_V4 是**单二进制**程序，前端资源已经内嵌进可执行文件，不需要额外部署 Web 服务。
 
-浏览器打开：
+## 1. 确认前置依赖
 
+| 项目 | 要求 |
+|---|---|
+| 系统 | Ubuntu 24.04 x86_64（推荐），Debian 系同版本亦可 |
+| 运行库（动态链接版） | `libpq5`、`libssl3t64` |
+| 数据库 | 一个可用的 PostgreSQL 实例（本地或远程都行） |
+| 消息队列 | **不需要**。本产品不使用 Redis 或任何消息队列 |
+
+Xiaoyi_QQ_V4 **不依赖** Redis、RabbitMQ、Nginx 之类的中间件；除了 PostgreSQL，没有别的外部服务。
+
+安装 .deb 前如果不确定运行库是否齐全，先补上：
+
+```bash
+# 补装动态链接所需的两个运行库（Ubuntu 24.04 包名）
+sudo apt-get update
+sudo apt-get install -y libpq5 libssl3t64
 ```
-http://服务器IP:端口/install
+
+## 2. 方式一：安装 `.deb` 包（推荐）
+
+Ubuntu 原生安装包，一条命令装完并自动接好 systemd 服务。安装包文件名形如 `xiaoyi-qq-c_0.1.0_amd64.deb`。
+
+```bash
+# 安装包本体；会自动装到 /opt/xiaoyi_qq_c/ 并注册 systemd 服务
+sudo dpkg -i xiaoyi-qq-c_0.1.0_amd64.deb
 ```
 
-## 配置步骤
+装完后会发生三件事：
 
-### 1. 数据库配置
+1. 程序文件落到 `/opt/xiaoyi_qq_c/`；
+2. systemd 服务 `xiaoyi-qq-c` 被 `enable` 并启动；
+3. 因为还没有安装标记，服务进入 **Web 安装向导**模式，监听 `8080`。
 
-填写你的 PostgreSQL 连接信息，两种方式任选：
+接着浏览器打开 `http://<你的服务器IP>:8080/install` 完成首次配置，详见 [首次配置](/deploy/config)。
 
-- **完整 URL**：直接粘贴 `postgresql+asyncpg://用户:密码@主机:5432/库名`（适合云数据库）。
-- **分步配置**：分别填主机、端口、库名、用户、密码、是否 SSL。
-
-::: warning 容器内连数据库
-如果数据库在**宿主机**上（不在容器内），主机地址不要填 `localhost`，要填**宿主机内网 IP** 或 Docker 网关地址（如 `172.17.0.1`）。云数据库则填 RDS 提供的地址，并确认安全组放行。
+::: tip 安装后的目录布局
+```text
+/opt/xiaoyi_qq_c/
+  xbot                    # 主程序（前端已内嵌）
+  config/bot.toml         # 配置文件
+  migrations/*.sql        # 数据库迁移脚本（启动时自动应用）
+  plugins/*.so            # 内置插件
+  .installed              # 安装完成标记（向导跑完才生成）
+```
 :::
 
-### 2. Redis 配置（可选）
+## 3. 方式二：`tar.gz` 便携包 + `install.sh`
 
-填 Redis 连接地址（默认 `redis://localhost:6379/0`）。没有 Redis 可留空，系统自动降级为数据库轮询。
+便携包和 `.deb` 目录结构一致，附带一个安装脚本，会帮你装依赖并注册 systemd 服务。
 
-### 3. 授权码
+```bash
+# 解压便携包
+tar -xzf xiaoyi-qq-c_0.1.0_amd64.tar.gz
+cd xiaoyi-qq-c
 
-授权码有两种获取方式，**任选其一**：
+# 安装脚本：装依赖 + 注册 systemd 服务（需要 root）
+sudo ./install.sh
+```
 
-- **留空 = 自动获取**：系统根据你当前访问的域名，自动向授权云查询并获取授权码。
-- **手动填写**：如果自动获取失败，直接把开发商发给你的授权码字符串粘贴进来。
+装完后同样访问 `http://<你的服务器IP>:8080/install` 走安装向导。
 
-::: tip 优先试自动获取
-大多数情况下，只要你的域名已在授权平台登记，留空就能自动获取到。失败时向导会提示，你手动粘贴后重新提交即可。
+## 4. 方式三：直接运行二进制（开发 / 测试）
+
+不想用 systemd 时，可以直接把程序跑起来，适合本机调试。
+
+```bash
+# 必须先进到程序所在目录（项目根目录），再启动
+cd /opt/xiaoyi_qq_c
+./xbot
+```
+
+Windows 上开发测试同理，在项目根目录执行 `build\src\xbot.exe`，依赖的 DLL 已经放在可执行文件旁边。
+
+::: danger 必须在项目根目录启动
+`config/`、`plugins/`、`migrations/` 以及安装标记 `.installed` 都是**相对当前工作目录**解析的。
+
+如果你在其他目录用绝对路径启动（例如 `/opt/xiaoyi_qq_c/xbot`），程序会找不到 `config/bot.toml`，也不会认出 `.installed`。systemd 服务里已经通过 `WorkingDirectory` 固定了目录，手动运行时请自己 `cd` 进去。
 :::
 
-### 4. 超级管理员
+## 5. 启动、停止与查看状态
 
-创建第一个超级管理员账户：用户名、邮箱、QQ 号、密码。
+`.deb` 与 `install.sh` 两种方式都用 systemd 托管服务，服务名统一是 `xiaoyi-qq-c`：
 
-安装完成后，用这个账户登录 [管理后台](../admin/overview)。
+```bash
+# 查看运行状态（是否 active、最近日志）
+sudo systemctl status xiaoyi-qq-c
 
-## 安装完成
+# 启动 / 停止 / 重启
+sudo systemctl start xiaoyi-qq-c
+sudo systemctl stop xiaoyi-qq-c
+sudo systemctl restart xiaoyi-qq-c
 
-提交后，系统会：
+# 设为开机自启 / 取消
+sudo systemctl enable xiaoyi-qq-c
+sudo systemctl disable xiaoyi-qq-c
 
-1. 连接数据库，初始化表结构。
-2. 写入本地配置文件（数据库、Redis、授权码）。
-3. 创建超级管理员、初始化权限、加载平台适配器。
-4. 提示安装成功，跳转到管理员登录页。
+# 实时跟踪日志（按 Ctrl+C 退出）
+sudo journalctl -u xiaoyi-qq-c -f
+```
 
-::: warning 安装是一次性的
-安装完成后 `/install` 会被拒绝再次访问。配置写在本地配置文件里，如需修改数据库连接或授权码，编辑该文件后重启容器。
+直接跑二进制时，用 `Ctrl+C` 停止即可。
+
+## 6. 确认服务已经起来
+
+两个端口分别承担不同职责：
+
+| 端口 | 用途 |
+|---|---|
+| `8080` | 控制台 / Web 安装向导（人访问的界面） |
+| `8081` | 适配器数据面（QQ 平台连接走这里，例如 OneBot 反向 WS） |
+
+```bash
+# 看端口有没有在监听
+ss -lntp | grep -E '8080|8081'
+
+# 健康检查应该返回 {"status":"ok"}
+curl http://127.0.0.1:8080/healthz
+```
+
+::: details 截图占位
+截一张浏览器打开 `http://<你的服务器IP>:8080/install` 时的安装向导首页，用来展示向导长什么样（本次文档不放图）。
 :::
 
 ## 下一步
 
-- 登录后台开始配置 → [管理后台总览](../admin/overview)
-- 激活授权的细节 → [授权激活](./authorization)
+- [首次配置](/deploy/config)
+- [反向代理与 HTTPS](/deploy/reverse-proxy)
+- [备份与运维](/deploy/ops)

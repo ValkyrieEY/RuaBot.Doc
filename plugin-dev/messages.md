@@ -1,170 +1,146 @@
+---
+title: 发送消息
+description: 被动回复与主动推送的用法、消息段 JSON 的写法（文本/富媒体/Markdown/按钮/@/引用）、平台差异与撤回。
+---
+
 # 发送消息
 
-> **你会学到**：怎么发纯文本、富媒体、Markdown、按钮、引用回复，以及自动撤回。
->
-> ::: tip C++ 框架（Xiaoyi_QQ_C）
-> C++ 侧用 `bot::Message::reply(text)` 回文本；复杂消息用 `BotHostApi::send_reply(evt, segments_json, len)` / `send_proactive(...)`，segments 为 XUBP 消息段数组（见下节 v2 统一段模型）。参考 [C++ SDK](./cpp-sdk)。
-> :::
+插件发消息只有两条路：**被动回复**（回触发你的那条消息）和**主动推送**（自己指定目标和会话）。两者都收一份**消息段 JSON** 作为内容。这页把这两条路和消息段的写法讲全。
 
-## 两种发送方式
+## 被动回复 send_reply
 
-- **`context.reply(text)`** —— 最简单，回一段纯文本。自动定位目标和类型，跨平台通用。
-- **`context.send_message(payload)`** —— 发复杂消息（富媒体、Markdown、按钮等），payload 是字典。
-
-```python
-await context.reply("你好！")                          # 简单文本
-
-await context.send_message({                            # 复杂消息
-    "content": "Hello World",
-    "msg_type": 0,
-})
+```cpp
+int32_t (*send_reply)(const BotMessageEvent* evt, const char* seg_json, size_t len);
 ```
 
-## XUBP v2：统一消息段（推荐）
+把触发事件原样传进去，框架自己判断是群还是私聊、该发给谁，并且**把回复绑定到原消息**上：
 
-v2 里入站/出站统一用 `segments` 数组表达富消息（替代 v1 的 `msg_type`+`media_url` 分裂，段类型见 [xubp/v2-overview](../xubp/v2-overview#3-统一消息段模型)）：
-
-```python
-await context.send_message({
-    "segments": [
-        {"type": "text", "text": "你好 "},
-        {"type": "at", "user_id": "成员OpenID"},
-        {"type": "image", "url": "https://example.com/a.png"},
-        {"type": "reply", "message_id": "要回复的消息ID"},
-    ],
-})
+```cpp
+// 最省事：SDK 的 reply() 把纯文本拼成消息段 JSON 再调 send_reply
+extern "C" void bot_plugin_on_message(const BotMessageEvent* evt) {
+    bot::Message m(evt);
+    if (m.is_group() && !m.at_me()) return;
+    m.reply("这是被动回复");     // 等价于 host->send_reply(evt, "[{\"type\":\"text\",\"text\":\"...\"}]", n)
+}
 ```
 
-支持段类型：`text` / `at` / `reply` / `image` / `audio` / `video` / `file` / `markdown` / `keyboard`。框架按平台能力自动映射为原生消息（QQ 官方：image → /files 上传 → msg_type:7）。以下 v1 的 `msg_type` 写法仍兼容，但新插件建议用 `segments`。
+为什么优先用它：**被动回复绑定原消息，在 QQ 官方平台上 5 分钟内免主动频控**（群 @ 消息与单聊消息都适用）。能被动回复就不要用主动推送。
 
-## msg_type 消息类型
+## 主动推送 send_proactive
 
-| msg_type | 含义 |
-|----------|------|
-| `0` | 纯文本（默认） |
-| `2` | Markdown |
-| `3` | Ark 模板 |
-| `7` | 富媒体（图片/视频/音频/文件） |
-
-## 纯文本
-
-```python
-await context.send_message({
-    "content": "Hello World",
-    "msg_type": 0,
-})
+```cpp
+int32_t (*send_proactive)(uint32_t bot_id, const char* target, uint8_t chat_type,
+                          const char* seg_json, size_t len);
 ```
 
-省略 `conversation` / `target` 时，自动用当前事件的会话和目标。
+要在**没有触发事件**的时候发消息（定时提醒、事件通知）就用它，需要自己给全三件事：
 
-## 富媒体（图片/视频/音频/文件）
+| 参数 | 取值 | 说明 |
+| --- | --- | --- |
+| `bot_id` | 机器人句柄 | 从事件里拿到的 `evt->bot_id`，或面板请求里的 `req->bot_id` |
+| `target` | 群 id 或用户 id | 群聊填 `chat_group_id`（QQ 官方是 group_openid），私聊填 `chat_user_id` |
+| `chat_type` | `0` 私聊 / `1` 群 / `2` 频道 | 决定了 `target` 该怎么解释 |
+| `seg_json` | 消息段 JSON | 见下文 |
 
-通过 `media_url` 给一个可访问的 URL，适配器会自动下载并上传到平台：
-
-```python
-# 图片（file_type=1）
-await context.send_message({
-    "msg_type": 7,
-    "media_url": "https://example.com/image.png",
-    "file_type": 1,
-    "content": "图片说明",
-})
-
-# 视频（file_type=2）
-await context.send_message({
-    "msg_type": 7,
-    "media_url": "https://example.com/video.mp4",
-    "file_type": 2,
-})
-
-# 音频（file_type=3）/ 文件（file_type=4）同理
+```cpp
+// 主动发一条群消息：bot_id 与群 id 来自之前保存的事件
+std::string seg = "[{\"type\":\"text\",\"text\":\"定时提醒：该打卡了\"}]";
+bot::host()->send_proactive(bot_id, group_id.c_str(), /*chat_type=*/1,
+                            seg.data(), seg.size());
 ```
 
-::: tip 大文件自动分片
-大文件（≥5MB）会自动使用分片上传，无需特殊处理。
+::: warning 主动消息受平台频控
+主动推送没有「绑定原消息」这层关系，会受平台主动消息额度与频控限制，发不出去时通常表现为接口调用失败或平台静默丢弃。排查看 [调试与排错](/plugin-dev/debugging)。
 :::
 
-## Markdown 消息
+## 消息段 JSON 的写法
 
-```python
-await context.send_message({
-    "content": " ",
-    "msg_type": 2,
-    "markdown": {"content": "# 标题\n正文内容"},
-})
+消息段是一个 **JSON 数组**，按顺序拼接。下面是最常用的几种：
+
+### 纯文本
+
+```json
+[{ "type": "text", "text": "你好，我是机器人" }]
 ```
 
-::: warning 平台支持差异
-Markdown / Ark / 按钮等富消息类型是**部分平台**（如 QQ 官方）支持的特性。在不支持的平台，建议降级为纯文本。判断方式见 [跨平台开发](./cross-platform#平台特有功能)。
+### 富媒体（图片 / 语音 / 视频 / 文件）
+
+```json
+[
+  { "type": "text", "text": "给你看张图" },
+  { "type": "image", "url": "https://example.com/a.png" }
+]
+```
+
+`type` 换成 `audio` / `video` / `file` 即为对应媒体，统一用 `url` 字段给资源地址。**一条消息里只会采用第一个媒体段**，不要指望一次发多张图。
+
+### Markdown
+
+```json
+[{ "type": "markdown", "content": "# 标题\n**加粗**的正文" }]
+```
+
+### 内联键盘（按钮）
+
+```json
+[
+  { "type": "markdown", "content": "请选择：" },
+  { "type": "keyboard", "json": "{\"content\":{\"rows\":[{\"buttons\":[{\"id\":\"1\",\"render_data\":{\"label\":\"确认\",\"visited_label\":\"已确认\"},\"action\":{\"type\":2,\"permission\":{\"type\":2},\"data\":\"click_ok\"}}]}]}}" }
+]
+```
+
+`json` 字段里是平台的键盘对象 JSON 原样字符串。按钮被点击时会产生**交互事件**（`BOT_EVT_INTERACTION`），事件里的 `interaction_data` 带着按钮数据，插件据此响应。
+
+### @ 某人
+
+```json
+[
+  { "type": "at", "user_id": "123456789" },
+  { "type": "text", "text": " 该交作业了" }
+]
+```
+
+### 引用回复
+
+```json
+[
+  { "type": "reply", "message_id": "原消息 id" },
+  { "type": "text", "text": "引用这条消息回复" }
+]
+```
+
+::: tip Markdown 与按钮只有 QQ 官方渲染
+**Markdown 段与键盘（按钮）段目前只有 QQ 官方机器人会渲染**；其它平台不支持这两个段，会发生降级——Markdown 与按钮不会被渲染成富文本，实际效果等同纯文本。想让插件跨平台可用，**正文一律用 `text` 段**，只在明确跑在 QQ 官方机器人上的场景使用 Markdown 与按钮。`@` 段在各平台都会正确映射（QQ 官方会内联成平台自己的 @ 标记）。
 :::
 
-## 内联键盘（按钮）
+## 撤回消息
 
-按钮作为 `keyboard` 字段传入，是一个二维数组（每行一组按钮）：
+两种方式，效果一样：
 
-```python
-await context.send_message({
-    "msg_type": 2,
-    "markdown": {"content": "请选择"},
-    "keyboard": [
-        [
-            {"label": "确认", "type": 1, "data": "confirm"},
-            {"label": "取消", "type": 1, "data": "cancel"},
-        ],
-        [
-            {"label": "访问官网", "type": 0, "url": "https://example.com"},
-        ],
-    ],
-})
+```cpp
+// 方式一：统一接口（需要机器人 id 与消息 id）
+bot::host()->recall(evt->bot_id, evt->message_id);
+
+// 方式二：能力码（推荐跨平台写法，先探测再调用）
+if (bot::host()->has_capability(evt->bot_id, "xubp.message.recall") == 1) {
+    std::string args = std::string("{\"message_id\":\"") + msg_id + "\"}";
+    char* out = nullptr; size_t ol = 0;
+    bot::host()->capability_invoke(evt->bot_id, "xubp.message.recall",
+                                   args.data(), args.size(), &out, &ol);
+    if (out && bot::host()->free) bot::host()->free(out);   // 返回缓冲由框架分配，必须 free
+}
 ```
 
-按钮 `type`：`1` = 回调按钮（点击触发 `interaction` 事件，`data` 是回调数据），`0` = 链接按钮（`url` 跳转）。
+撤回的两个前提：**平台支持撤回**，且消息在平台的**可撤回时限内**（撤回一条很久以前的消息会失败，这是平台规则）。先用 `has_capability` 探测，不支持就降级为发一条提示消息。
 
-用户点回调按钮后，插件会收到 `interaction` 事件，从 `interaction_data` 取出 `data` 判断点了哪个。
+## 发送时的三条实用约定
 
-## 引用回复
-
-附带 `msg_id` 实现消息引用：
-
-```python
-await context.send_message({
-    "content": "回复内容",
-    "msg_id": "要回复的消息ID",   # 从 event["message_id"] 取
-})
-```
-
-`context.reply()` 默认就会引用当前消息，一般不用手动构造。
-
-## 主动撤回（仅群消息）
-
-发送时指定 `auto_delete_time`，消息发出 N 秒后自动撤回：
-
-```python
-await context.send_message({
-    "content": "这条消息30秒后自动撤回",
-    "auto_delete_time": 30,
-})
-```
-
-也可以事后用 `context.recall_message(message_id)` 主动撤回。
-
-::: warning 撤回时限
-QQ 官方仅支持撤回 **2 分钟内**的消息，超时无法撤回。
-:::
-
-## 发到其他目标（主动推送）
-
-`reply` / `send_message` 默认回当前会话。要发到**别的**群或用户，用 `send_proactive_message`：
-
-```python
-await context.send_proactive_message(
-    target="group_openid_xxx",
-    message={"content": "通知内容"},
-    message_type="group",
-)
-```
+1. **回复优先**：能用 `send_reply` 就不要用 `send_proactive`——省去目标计算，还能吃到免频控窗口；
+2. **文本用 `text` 段**：跨平台最稳，`@` 用 `at` 段而不是拼字符串；
+3. **拿不准平台能力就先探测**：调能力前一律 `has_capability`，见 [调用平台能力](/plugin-dev/capabilities)。
 
 ## 下一步
 
-- 拦截/审计发出的消息 → [拦截器](./interceptors)
-- 跨平台注意事项 → [跨平台开发](./cross-platform)
+- [调用平台能力](/plugin-dev/capabilities)：禁言、踢人、审批、点赞等平台操作
+- [处理事件](/plugin-dev/events)：事件从哪来、字段怎么读
+- [调试与排错](/plugin-dev/debugging)：消息发不出去时怎么查
