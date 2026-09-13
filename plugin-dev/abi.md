@@ -13,7 +13,7 @@ description: 当前 ABI 版本、稳定性承诺、加载协商的三条规则�
 | --- | --- |
 | ABI major | `1` |
 | ABI minor | `5` |
-| 版本字符串 | `1.5` |
+| 版本字符串 | `1.6` |
 | 版本宏 | `BOT_ABI_VERSION_MAJOR` / `BOT_ABI_VERSION_MINOR` |
 | 打包版本号 | `BOT_ABI_VERSION`（高 16 位 major、低 16 位 minor） |
 | 拆分宏 | `BOT_ABI_MAJOR_OF(v)` / `BOT_ABI_MINOR_OF(v)` |
@@ -49,13 +49,13 @@ v1 发布后，`bot_plugin.h` 里的这套合同遵循「**只增不改**」：
 | 2 | 插件 minor **大于**框架 minor | **拒绝加载**（插件依赖更新的宿主 API 尾部字段，加载会读到越界内存） |
 | 3 | 插件 minor **小于等于**框架 minor | **兼容**（旧插件不引用新字段，天然向后兼容） |
 
-用一张表看几个例子（假设框架是 1.5）：
+用一张表看几个例子（假设框架是 1.6）：
 
 | 插件版本 | 结果 | 原因 |
 | --- | --- | --- |
 | 1.0 | 加载 | minor 更低，兼容 |
 | 1.3 | 加载 | 兼容 |
-| 1.5 | 加载 | 完全一致 |
+| 1.6 | 加载 | 完全一致 |
 | 1.6 | 拒绝 | 插件比框架新（规则 2） |
 | 2.0 | 拒绝 | major 不一致（规则 1） |
 
@@ -64,7 +64,7 @@ v1 发布后，`bot_plugin.h` 里的这套合同遵循「**只增不改**」：
 major 不一致时，日志里会出现这样一条（路径是你的实际插件路径）：
 
 ```text
-plugins/mybot/mybot.so: ABI 不兼容——插件 v2.0 要求 major=2，但框架为 1.5 (major=1)；需用与框架同版本的 SDK 重新编译插件
+plugins/mybot/mybot.so: ABI 不兼容——插件 v2.0 要求 major=2，但框架为 1.6 (major=1)；需用与框架同版本的 SDK 重新编译插件
 ```
 
 插件 minor 比框架新时：
@@ -89,6 +89,7 @@ plugins/mybot/mybot.so: 插件 v1.6 需要更新的宿主 API，但框架为 1.5
 | `1.3` | 插件 Web 面板：`BotPluginMeta` 尾部追加 `web_entry` / `web_title`、`BotWebRequest` / `BotWebResponse`、`bot_plugin_web_route` 回调、`setting_set`（写当前插件+机器人配置） | 插件可自带网页面板并持久化配置 |
 | `1.4` | 面板事件推送：`panel_push` | 面板可以实时收到插件推的事件 |
 | `1.5` | 任意 method 出站 HTTP：`http_request`（GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS） | 插件可调用任意外部 API |
+| `1.6` | 按 bot 显式读写设置：`setting_get_for` / `setting_set_for` | **后台线程、停机钩子里也能落盘**（1.5 及以前只有依赖上下文的版本，那里写会被静默忽略） |
 
 ::: tip 生成面板元数据要 1.3 及以上的 SDK
 `web_entry` / `web_title` 是 1.3 追加到结构体尾部的字段。用更早的 SDK 编译出的插件（minor < 3）框架不会去读这两个字段，面板自然也不会出现——写面板请用当前 SDK。
@@ -99,8 +100,8 @@ plugins/mybot/mybot.so: 插件 v1.6 需要更新的宿主 API，但框架为 1.5
 | 场景 | 要不要重编 |
 | --- | --- |
 | 框架升级了 **major**（例如 1.x → 2.0） | **必须**，否则拒绝加载 |
-| 框架升级了 minor（例如 1.5 → 1.6） | 不用；旧插件继续加载，只是用不到新能力 |
-| 想使用比编译时更新的 minor 接口（例如 1.5 的 `http_request`） | **必须**，需要用 ≥ 该版本的 SDK 重编 |
+| 框架升级了 minor（例如 1.6 → 1.7） | 不用；旧插件继续加载，只是用不到新能力 |
+| 想使用比编译时更新的 minor 接口（例如 1.6 的 `setting_set_for`） | **必须**，需要用 ≥ 该版本的 SDK 重编 |
 | 换了操作系统 / CPU 架构（Linux x86_64 → ARM） | **必须**，动态库是平台相关的 |
 | 只改了插件自己的代码 | 重新编译，这是当然的 |
 
