@@ -121,6 +121,7 @@ export default defineConfig({
             { text: '我的机器人', link: '/console/bots' },
             { text: '插件市场与安装', link: '/console/plugins' },
             { text: '内置插件一览', link: '/console/builtin-plugins' },
+            { text: '群管使用指南', link: '/console/group-admin' },
             { text: '订阅 · 卡密 · 充值', link: '/console/billing' },
             { text: '开放 API', link: '/console/openapi' },
           ],
