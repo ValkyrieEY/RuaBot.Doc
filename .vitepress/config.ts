@@ -120,6 +120,7 @@ export default defineConfig({
             { text: '控制台总览', link: '/console/overview' },
             { text: '我的机器人', link: '/console/bots' },
             { text: '插件市场与安装', link: '/console/plugins' },
+            { text: '内置插件一览', link: '/console/builtin-plugins' },
             { text: '订阅 · 卡密 · 充值', link: '/console/billing' },
             { text: '开放 API', link: '/console/openapi' },
           ],
