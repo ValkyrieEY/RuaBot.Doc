@@ -32,13 +32,13 @@ description: 在用户中心生成 API Key，用 X-API-Key 请求头调用用户
 ```bash
 # 查询当前账号信息（把占位 Key 换成你自己的）
 curl -H "X-API-Key: <你的API Key>" \
-     https://example.com/api/user/info
+     https://example.com/api/openapi/user/info
 ```
 
 ```bash
 # 列出你名下的机器人
 curl -H "X-API-Key: <你的API Key>" \
-     https://example.com/api/bots
+     https://example.com/api/openapi/bots
 ```
 
 把 `example.com` 换成你实际访问控制台用的域名即可。
@@ -54,9 +54,9 @@ curl -H "X-API-Key: <你的API Key>" \
 | `user/notifications` | 通知中心的消息 |
 | `user/subscription` | 当前套餐与额度情况 |
 | `bots` | 你的机器人列表 |
-| `bots/{uuid}` | 指定机器人的详情 |
-| `bots/{uuid}/stats` | 指定机器人的统计数据 |
-| `bots/{uuid}/send` | 通过指定机器人发送消息 |
+| `bot/{uuid}` | 指定机器人的详情 |
+| `bot/{uuid}/stats` | 指定机器人的统计数据 |
+| `bot/{uuid}/send` | 通过指定机器人发送消息 |
 | `plans` | 可购买的套餐列表 |
 | `plugins` | 插件市场列表 |
 | `server/stats` | 服务器运行概况 |
@@ -64,10 +64,71 @@ curl -H "X-API-Key: <你的API Key>" \
 `{uuid}` 就是机器人详情页「设置」Tab 里显示的那个 UUID。
 
 ::: tip 先确认机器人 UUID
-调 `bots/{uuid}/...` 系列接口之前，先在控制台进机器人详情页，从「设置」Tab 复制 UUID，避免手工拼错。
+调 `bot/{uuid}/...` 系列接口之前，先在控制台进机器人详情页，从「设置」Tab 复制 UUID，避免手工拼错。
 :::
 
-## 4. 管理级接口
+## 4. 调用插件接口（插件级 API）
+
+除了上面那些平台接口，**每个插件自己的功能也能通过 API 调**。一条通路覆盖所有插件：
+
+```
+POST /api/openapi/plugin/{机器人UUID}/{插件码}/{动作}
+Header: X-API-Key: <你的 Key>
+Body:   与插件面板里的请求格式完全一致
+```
+
+返回也是插件原样返回的 JSON，所以**面板里能做的事，API 都能做**，不用为每个插件学一套新格式。
+
+以「消息发送」插件为例（插件码 `msg_sender`）：
+
+| 动作 | 请求体 | 用途 |
+|---|---|---|
+| `groups` | `{}` | 机器人收到过消息的群列表 |
+| `probe` | `{"group_openid":"..."}` | 该群的发送权限（能否主动、被动窗口） |
+| `messages` | `{"group_openid":"...","limit":50}` | 该群最近的聊天记录 |
+| `send` | `{"group_openid":"...","mode":"passive\|proactive","kind":"text\|markdown\|image\|mixed","text":"...","markdown":"...","image_url":"..."}` | 发消息 |
+| `clear` | `{"group_openid":"..."}` | 清空该群的本地聊天记录 |
+
+```bash
+curl -X POST "https://你的域名/api/openapi/plugin/<机器人UUID>/msg_sender/send" \
+  -H "X-API-Key: <你的 Key>" -H "Content-Type: application/json" \
+  -d '{"group_openid":"<群标识>","mode":"proactive","kind":"text","text":"你好"}'
+```
+
+### 两种 Key，用途不同
+
+控制台「开放 API」页面上有两种 Key：
+
+| Key | 能调什么 | 适合 |
+|---|---|---|
+| **平台 Key** | **所有**插件的接口、你名下所有机器人 | 服务端脚本、一次性调用 |
+| **插件专用 Key** | 只有**指定的那一个插件**，还可再限一台机器人 | **放进手机 App / 客户端** |
+
+一个账号可以建**多把**插件 Key（一台设备一把）。**放进 App 的凭据建议用插件 Key**——它万一泄露，影响面只到那一个插件。
+
+新建插件 Key 时**明文只显示一次**，关掉就再也看不到，请当场复制保存。丢了就重新生成一把。
+
+### 插件可以限制 API 能做什么
+
+插件不一定对 API 和面板一视同仁。以「消息发送」为例：
+
+- 面板里**不受限制**（面板要先登录，是你本人在用）
+- 通过 **API 发送时，只允许发到你在插件面板「设置」里配置的白名单群**
+
+这是有意为之：API Key 是存在手机上的长期凭据，泄露概率比登录密码高得多。
+**白名单留空，则 API 一个群都发不出去**——这是安全默认，要去插件面板的「设置」里把群标识加进去。
+
+被白名单拦下时会返回：
+
+```json
+{"ok": false, "error": "target_not_allowed", "hint": "该群不在 API 允许发送的名单里；..."}
+```
+
+::: tip 群标识从哪来
+在插件面板的群列表里能看到，或用 `groups` 动作列出来。
+:::
+
+## 5. 管理级接口
 
 除了用户级接口，还有一组**管理级接口**，用于服务商侧的管理操作。
 
@@ -77,7 +138,7 @@ curl -H "X-API-Key: <你的API Key>" \
 
 如果你确实需要管理级能力，请联系服务商。
 
-## 5. 调用示例
+## 6. 调用示例
 
 发消息的接口用 `POST`，把内容放在请求体里：
 
@@ -88,14 +149,18 @@ curl -X POST \
   -H "Content-Type: application/json" \
   -d '{
         "target": "<群号或用户ID>",
-        "message": "来自开放 API 的问候"   # 消息内容
+        "chat_type": 1,
+        "content": "来自开放 API 的问候"
       }' \
-  https://example.com/api/bots/<机器人UUID>/send
+  https://example.com/api/openapi/bot/<机器人UUID>/send
 ```
+
+`chat_type` 填 `1` 表示群、`0` 表示私聊。**注意这个平台级接口只能发纯文本**；
+要发 Markdown / 图片 / 图文混合，用上面第 4 节的**插件级接口**（`msg_sender` 的 `send` 动作）。
 
 不同接口需要的请求体字段不一样，以接口返回的提示为准。调用失败时先看返回里的错误信息，再对照下面的排查表。
 
-## 6. 排查
+## 7. 排查
 
 ### 症状：返回 401
 
@@ -119,12 +184,12 @@ curl -X POST \
 
 ```bash
 # Linux / macOS：把响应头和状态码一起打出来，方便定位
-curl -i -H "X-API-Key: <你的API Key>" https://example.com/api/bots
+curl -i -H "X-API-Key: <你的API Key>" https://example.com/api/openapi/bots
 ```
 
 ```powershell
 # Windows PowerShell：等价的写法
-Invoke-RestMethod -Uri "https://example.com/api/bots" `
+Invoke-RestMethod -Uri "https://example.com/api/openapi/bots" `
   -Headers @{ "X-API-Key" = "<你的API Key>" }
 ```
 
