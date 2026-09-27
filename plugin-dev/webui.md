@@ -46,6 +46,17 @@ int32_t bot_plugin_web_route(const BotWebRequest* req, BotWebResponse* out);   /
 | `bot_id` | 该机器人的运行时句柄，可直接传给 `send_proactive` 等接口 |
 | `bot_uuid` | 机器人的 UUID（面板地址里的那一段），`plugin_code` 是插件编码 |
 | `user_id` | 拥有该机器人的用户 id（后端已鉴权） |
+| `source` | 请求来自哪里：`"panel"`（控制台内嵌面板）或 `"api"`（插件 API，走 API Key）。**先判 `api_minor >= 2` 再读** |
+| `bot_app_id` | 该机器人（QQ 官方）的 `app_id`；OneBot 适配器或取不到时是空串。**先判 `api_minor >= 3` 再读** |
+
+::: tip 结构是"只许尾部追加"的
+`api_minor` 是**这个结构**的版本号（跟 `BOT_ABI_VERSION_MINOR` 不是一回事，
+加字段不需要新增宿主函数、也不会让旧插件失效）。规则：
+
+- **写在字段后缀的字段，读之前必须先判 `api_minor`** —— 旧框架不会填它，
+  直接摸就是读越界。
+- `1` = 初始；`2` = 多了 `source`；`3` = 多了 `bot_app_id`。
+:::
 
 响应结构：
 
