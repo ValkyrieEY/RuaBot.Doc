@@ -20,6 +20,22 @@ Xiaoyi_QQ_V4 是**单二进制**程序，前端资源已经内嵌进可执行文
 
 Xiaoyi_QQ_V4 **不依赖** Redis、RabbitMQ、Nginx 之类的中间件；除了 PostgreSQL，没有别的外部服务。
 
+::: warning 建库时请把「所有者」设成你要用的那个用户
+程序启动时会自动建表。而 **PostgreSQL 15 及以上不再允许普通用户在 `public` schema 里建表** ——
+只有数据库的**所有者**可以。
+
+用宝塔之类的面板建库时，如果所有者留成了 `postgres`，安装向导会在「创建管理员」那一步失败
+（报 `relation "users" does not exist`）。**建库时就把所有者选成你要用的用户名**即可避免。
+
+已经建好了的话，用管理员账号执行一次也能解决：
+
+```sql
+GRANT CREATE ON SCHEMA public TO 你的数据库用户名;
+```
+
+详见 [常见问题 · 安装向导走到「创建管理员」就失败](/faq)。
+:::
+
 安装 .deb 前如果不确定运行库是否齐全，先补上：
 
 ```bash
