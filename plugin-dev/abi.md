@@ -90,7 +90,7 @@ plugins/mybot/mybot.so: 插件 v1.8 需要更新的宿主 API，但框架为 1.7
 | `1.4` | 面板事件推送：`panel_push` | 面板可以实时收到插件推的事件 |
 | `1.5` | 任意 method 出站 HTTP：`http_request`（GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS） | 插件可调用任意外部 API |
 | `1.6` | 按 bot 显式读写设置：`setting_get_for` / `setting_set_for` | **后台线程、停机钩子里也能落盘**（1.5 及以前只有依赖上下文的版本，那里写会被静默忽略） |
-| `1.7` | 加密凭据存储：`secret_set` / `secret_get` / `secret_delete` / `secret_keys` / `secret_owners` | 按终端用户隔离地保存**敏感值**（例如第三方账号的登录态）。敏感值由框架负责加密保存，插件既拿不到密钥也不需要自己实现加密 |
+| `1.7` | ① 加密凭据存储：`secret_set` / `secret_get` / `secret_delete` / `secret_keys` / `secret_owners`；② 带请求头/响应头的出站 HTTP：`http_request_ex` | ① 按终端用户隔离地保存**敏感值**（例如第三方账号的登录态），由框架负责加密保存，插件既拿不到密钥也不需要自己实现加密。② 终于能**发**请求头（`Cookie` / `Referer` / `User-Agent`）和**读**响应头（会话 Cookie 只在 `Set-Cookie` 里）——两者都是「拿不到就做不了事」，例如调用需要登录态的第三方接口、或从响应头里取会话标识 |
 
 ::: tip 生成面板元数据要 1.3 及以上的 SDK
 `web_entry` / `web_title` 是 1.3 追加到结构体尾部的字段。用更早的 SDK 编译出的插件（minor < 3）框架不会去读这两个字段，面板自然也不会出现——写面板请用当前 SDK。
