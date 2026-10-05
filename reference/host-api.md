@@ -97,14 +97,15 @@ description: 框架提供给插件的 BotHostApi 函数指针表全部接口签�
 | `http_request` | `int32_t (*http_request)(const char* method, const char* url, const char* body, int verify_ssl, int timeout_sec, char** out, size_t* out_len, int* out_status, const char** out_content_type)` | 任意 method（GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS）；`verify_ssl=0` 跳过证书校验，`timeout_sec<=0` 用默认；成功（含非 2xx，响应体照回）返回 `BOT_OK`，传输失败返回 `BOT_EINTERNAL` | 1.5 |
 | `setting_get_for` | `int32_t (*setting_get_for)(uint32_t bot_id, const char* key, const char** out, size_t* len)` | 读**指定机器人**的设置；不依赖当前上下文，**后台线程与停机钩子里也能用** | 1.6 |
 | `setting_set_for` | `int32_t (*setting_set_for)(uint32_t bot_id, const char* key, const char* value, size_t len)` | 写**指定机器人**的设置（`value=NULL` 删键）；插件收尾落盘必须用它，否则数据会丢 | 1.6 |
-| `http_request_ex` | `int32_t (*http_request_ex)(const char* method, const char* url, const char* body, const char* req_headers_json, int verify_ssl, int timeout_sec, char** out, size_t* out_len, int* out_status, char** out_resp_headers_json)` | 同 `http_request`，但**能发请求头、也能读响应头** | 1.7 |
+| `http_request_ex` | `int32_t (*http_request_ex)(const char* method, const char* url, const char* body, const char* req_headers_json, int verify_ssl, int timeout_sec, int follow_redirect, char** out, size_t* out_len, int* out_status, char** out_resp_headers_json)` | 同 `http_request`，但**能发请求头、也能读响应头**，且能控制是否跟随重定向 | 1.7 |
 | `free` | `void (*free)(void* p)` | 释放 `http_get` / `http_request` / `http_request_ex` / `capability_invoke` / `kv_keys` 返回的缓冲 | 早于 1.3 |
 
-`http_request_ex` 的两个头参数：
+`http_request_ex` 的三个非平凡参数：
 
 | 参数 | 格式 | 说明 |
 | --- | --- | --- |
 | `req_headers_json` | JSON 对象，如 `{"Cookie":"a=1","Referer":"https://x/"}` | 空串或 `NULL` = 不发额外请求头（与 `http_request` 行为一致）。同名头只支持一个值，要发多条请自己用 `, ` 在值里拼接 |
+| `follow_redirect` | `int`，非 0 跟随（≤5 跳） | **它和响应头是耦合的**：跟随开启时只能拿到最终一次响应的头，中途各跳设置的 Cookie 会丢。需要中途响应的头（有些登录/鉴权流程正是靠它拿会话凭据）就传 `0`，自己按 `Location` 决定下一步 |
 | `out_resp_headers_json` | JSON **数组**，元素是 `[名字, 值]`，如 `[["set-cookie","qrsig=…"],["content-type","text/html"]]` | 传 `NULL` = 不要响应头。名字统一小写；**同名头会全部保留**（`Set-Cookie` 常常有多条，去重就把登录态丢了）；跟随重定向时只含**最终一次**响应的头 |
 
 `out` 与 `out_resp_headers_json`（非 `NULL` 时）都由**框架分配**，用毕都要 `free`。
