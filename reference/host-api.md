@@ -63,6 +63,32 @@ description: 框架提供给插件的 BotHostApi 函数指针表全部接口签�
 | `has_capability` | `int32_t (*has_capability)(uint32_t bot_id, const char* code)` | 查询某机器人是否支持该能力码：`1` 支持 / `0` 不支持 | 1.0 |
 | `capability_invoke` | `int32_t (*capability_invoke)(uint32_t bot_id, const char* code, const char* args_json, size_t args_len, char** out, size_t* out_len)` | 通用能力调用，JSON 进 JSON 出；不支持返回 `BOT_ENOTSUP`；结果由**框架分配**，用 `free` 释放 | 1.0 |
 
+## 加密凭据存储
+
+给**大量、按终端用户分片**的敏感值用。典型场景：把某个用户第三方账号的登录态存下来，重启后不用让他重新登录。敏感值由**框架负责加密保存**——插件既拿不到密钥，也不需要自己实现加密。
+
+和「设置」的区别：设置是每个机器人一份、适合个位数的配置项；这组接口按 `owner_key` 分片，适合成百上千条按用户的数据。
+
+| 函数 | 签名 | 说明 | ABI |
+| --- | --- | --- | --- |
+| `secret_set` | `int32_t (*secret_set)(uint32_t bot_id, const char* owner_key, const char* key, const uint8_t* data, size_t len)` | 写一条凭据；`data` 为 `NULL` 或 `len=0` 时删除该键 | 1.7 |
+| `secret_get` | `int32_t (*secret_get)(uint32_t bot_id, const char* owner_key, const char* key, const uint8_t** out, size_t* out_len)` | 读一条凭据；不存在时返回 `BOT_OK` 且 `*out = nullptr` | 1.7 |
+| `secret_delete` | `int32_t (*secret_delete)(uint32_t bot_id, const char* owner_key, const char* key)` | 删除一条凭据 | 1.7 |
+| `secret_keys` | `int32_t (*secret_keys)(uint32_t bot_id, const char* owner_key, const char** out, size_t* out_len)` | 列出该 `owner_key` 下的全部键名，返回 JSON 数组 | 1.7 |
+| `secret_owners` | `int32_t (*secret_owners)(uint32_t bot_id, const char** out, size_t* out_len)` | 列出该机器人下存过凭据的全部 `owner_key`（比如「有哪些用户登录过」） | 1.7 |
+
+`owner_key` 是你的隔离维度（比如用户的第三方账号 ID），`key` 是这条凭据的名字（比如 `token`）。两者都必须非空且不超过 128 字节。
+
+::: warning 缓冲归属和别的接口不一样
+`secret_get` / `secret_keys` / `secret_owners` 返回的是**线程局部缓冲**，和 `setting_get` 同一类——下次同线程调用就会被覆盖，**要立刻复制，也不要传给 `free`**。需要 `free` 的是 `kv_keys` / `http_get` / `http_request` / `capability_invoke` 那一组。
+:::
+
+::: tip 后台线程和停机钩子也能用
+`bot_id` 是显式参数，不依赖当前上下文。要把内存里的凭据落盘，用它，而不是 `setting_set`。
+:::
+
+读凭据失败时会返回 `BOT_EINTERNAL`，这和「该用户还没存过凭据」（返回 `BOT_OK` + `*out = nullptr`）是两回事，**别混着判**——否则存储一有问题，插件就会当成「用户没登录」，让用户白扫一次码。
+
 ## HTTP
 
 | 函数 | 签名 | 说明 | ABI |
@@ -104,6 +130,12 @@ description: 框架提供给插件的 BotHostApi 函数指针表全部接口签�
 | `bot::setting_get` | `std::string setting_get(const std::string& key, std::string def = {})` | 读设置；不存在返回默认值 |
 | `bot::setting_set` | `bool setting_set(const std::string& key, std::string_view value = {})` | 写设置；value 为空则删除键 |
 | `bot::panel_push` | `bool panel_push(std::string_view json)` | 推送面板事件 |
+| `bot::secret_set` | `bool secret_set(uint32_t bot_id, std::string_view owner, std::string_view key, std::string_view data)` | 写一条加密凭据；失败返回 `false` |
+| `bot::secret_get` | `std::string secret_get(uint32_t bot_id, std::string_view owner, std::string_view key, std::string def = {})` | 读一条加密凭据；返回的是**拷贝**，不存在或读失败返回 `def` |
+| `bot::secret_delete` | `bool secret_delete(uint32_t bot_id, std::string_view owner, std::string_view key)` | 删除一条加密凭据 |
+| `bot::secret_exists` | `bool secret_exists(uint32_t bot_id, std::string_view owner, std::string_view key)` | 判断某条凭据是否存在（不需要取值时用它，省一次拷贝） |
+| `bot::secret_keys` | `std::vector<std::string> secret_keys(uint32_t bot_id, std::string_view owner)` | 某用户下的全部凭据键名 |
+| `bot::secret_owners` | `std::vector<std::string> secret_owners(uint32_t bot_id)` | 该机器人下存过凭据的全部用户 |
 | `bot::shutdown_hook` | `void (*shutdown_hook)()` | 可选清理钩子；静态对象注册，`shutdown` 时调用（见 [生命周期回调](/plugin-dev/lifecycle)） |
 
 ```cpp

@@ -1,0 +1,16 @@
+docs: ABI 升到 1.7（插件加密凭据存储 secret_*）
+
+框架侧把 ABI 从 1.6 升到 1.7，尾部追加 secret_set / secret_get / secret_delete /
+secret_keys / secret_owners 五个函数，给"按终端用户分片保存敏感值"用。
+
+- plugin-dev/abi：当前版本表升到 1.7；版本变更对照表加 1.7 行；协商示例、日志文案、
+  "什么时候需要重编"里的版本号一并更新。顺手修掉一个笔误——ABI minor 那行写的是 5，
+  但同表版本字符串写的是 1.6。
+- reference/host-api：新增「加密凭据存储」小节（签名与头文件逐字一致，标注 ABI 1.7），
+  并补全 SDK 封装层表格里的 secret_* 六个封装。
+- plugin-dev/storage：四种存储方式的对比表加一行；新增「加密凭据 secret_*」小节，
+  含用法示例与规则表。
+- plugin-dev/debugging：ABI 报错示例里的版本号更新到当前版本。
+
+按 _authoring/STYLE.md 的红线，全文只写能力，不写加密算法、密文格式与数据库结构。
+`npm run build` 通过（无死链）。

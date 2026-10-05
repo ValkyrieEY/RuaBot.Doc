@@ -64,8 +64,8 @@ g++ -shared -fPIC -std=c++17 mybot.cpp -o mybot.so -I./include
 ### 症状
 
 ```text
-plugins/mybot/mybot.so: ABI 不兼容——插件 v2.0 要求 major=2，但框架为 1.5 (major=1)；需用与框架同版本的 SDK 重新编译插件
-plugins/mybot/mybot.so: 插件 v1.6 需要更新的宿主 API，但框架为 1.5；请升级框架或改用 v1.5 SDK 编译
+plugins/mybot/mybot.so: ABI 不兼容——插件 v2.0 要求 major=2，但框架为 1.7 (major=1)；需用与框架同版本的 SDK 重新编译插件
+plugins/mybot/mybot.so: 插件 v1.8 需要更新的宿主 API，但框架为 1.7；请升级框架或改用 v1.7 SDK 编译
 ```
 
 ### 原因

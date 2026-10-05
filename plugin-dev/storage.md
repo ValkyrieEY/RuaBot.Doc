@@ -1,6 +1,6 @@
 ---
 title: 存储与配置
-description: KV 键值存储、二进制 Blob、per-bot 设置读写（setting_get/setting_set）的用法与隔离规则，附记分板例子。
+description: KV 键值存储、二进制 Blob、per-bot 设置读写（setting_get/setting_set）、加密凭据（secret_*）的用法与隔离规则，附记分板例子。
 ---
 
 # 存储与配置
@@ -12,6 +12,7 @@ description: KV 键值存储、二进制 Blob、per-bot 设置读写（setting_g
 | KV 键值 | `kv_get` / `kv_set` / `kv_delete` / `kv_keys` | 插件 + 租户 + 机器人 | 运行时状态、统计、缓存、用户数据 |
 | Blob 二进制 | `blob_get` / `blob_set` / `blob_delete` | 插件 + 租户 + 机器人 | 图片、序列化数据等任意字节 |
 | per-bot 设置 | `setting_get` / `setting_set` | 插件 + 机器人 | **要展示给用户配置的键值**（控制台/面板可读写） |
+| 加密凭据 | `secret_set` / `secret_get` / `secret_delete` / `secret_keys` / `secret_owners` | 插件 + 机器人 + 你自定的 `owner_key` | **按终端用户分片的敏感值**（例如第三方账号的登录态），由框架加密保存 |
 
 区别在最后一列：**用户能在界面上改的用设置，插件自己攒的用 KV**。设置项还会被控制台的配置抽屉与插件 Web 面板读到（`window.XBOT_PANEL.settings`），KV 不会。
 
@@ -108,6 +109,51 @@ bot::setting_set("greeting");                                   // 传空值 = �
 ::: tip 想让用户看得见，就在元数据里声明 schema
 `setting_schema_json` 里声明的键会渲染成控制台的「功能参数」表单（支持 `text` / `password` / `select` / `switch`），用户在界面上改的值与 `setting_get` 读到的是同一份数据。schema 写法见 [插件元数据](/reference/meta)。
 :::
+
+## 加密凭据 secret_*（ABI 1.7）
+
+有些数据不能明文放着：用户第三方账号的登录态、访问令牌、校验用的口令。这类值用 `secret_*` 存——**框架负责加密保存，插件既拿不到密钥，也不需要自己实现加密**。
+
+它和设置的区别在**分片维度**：设置是每个机器人一份（适合个位数的配置项），而 `secret_*` 按你自己定的 `owner_key` 分片，适合成百上千条**按用户**的数据。
+
+```cpp
+// SDK 封装：读出来是拷贝，不用管缓冲生命周期
+bool secret_set(uint32_t bot_id, std::string_view owner, std::string_view key, std::string_view data);
+std::string secret_get(uint32_t bot_id, std::string_view owner, std::string_view key, std::string def = {});
+bool secret_delete(uint32_t bot_id, std::string_view owner, std::string_view key);
+std::vector<std::string> secret_keys(uint32_t bot_id, std::string_view owner);
+std::vector<std::string> secret_owners(uint32_t bot_id);
+```
+
+```cpp
+// 用户扫码登录成功后，把登录态挂到他的账号 ID 下面
+bot::secret_set(evt->bot_id, "1234567", "session", cookie_blob);
+
+// 之后任意一次指令里取出来用
+std::string session = bot::secret_get(evt->bot_id, "1234567", "session");
+if (session.empty()) {
+    m.reply("你还没登录，先发 [网页登录]");
+    return;
+}
+
+// 想看看这台机器人上有哪些用户登录过
+for (const auto& owner : bot::secret_owners(evt->bot_id)) {
+    bot::Logger::debug() << "[mybot] 已绑定的用户: " << owner;
+}
+
+// 用户解绑时删掉（这里只删一条；把 keys 列出来逐个删即可清空该用户）
+bot::secret_delete(evt->bot_id, "1234567", "session");
+```
+
+规则如下：
+
+| 规则 | 说明 |
+| --- | --- |
+| `bot_id` | **显式传参**，不依赖当前上下文——所以后台线程与停机钩子里也能读写（同 `setting_set_for`） |
+| `owner_key` / `key` | 必须非空、各自不超过 128 字节；`owner_key` 是你的隔离维度（如用户账号 ID），`key` 是凭据名（如 `session`） |
+| 删除 | `secret_set` 传空数据即删除该键，等价于 `secret_delete` |
+| 读不到时 | 返回 `BOT_OK` 且 `*out = nullptr`，**不是错误**——当作「该用户还没存过」处理 |
+| 读失败时 | 返回 `BOT_EINTERNAL`。它和「还没存过」是两回事，**不要混着判**——否则存储一有问题，插件就会当成「用户没登录」，让人白重扫一次码 |
 
 ## 完整例子：记分板
 
